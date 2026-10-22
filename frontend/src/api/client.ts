@@ -199,6 +199,17 @@ export interface DatasetStats {
   paper_reference: string;
 }
 
+export interface BenchmarkResult {
+  batch_size: number;
+  elapsed_ms: number;
+  latency_per_window_ms: number;
+  throughput_windows_sec: number;
+  throughput_flows_sec: number;
+  total_parameters: number;
+  device: string;
+  model_architecture: string;
+}
+
 async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -267,6 +278,12 @@ export const API = {
     api<AnalysisResult>("/api/simulate", {
       method: "POST",
       body: JSON.stringify({ attack_type, n_flows, max_windows }),
+    }),
+
+  benchmarkRun: (batch_size = 30) =>
+    api<BenchmarkResult>("/api/benchmark-run", {
+      method: "POST",
+      body: JSON.stringify({ batch_size }),
     }),
 };
 

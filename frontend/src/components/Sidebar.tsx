@@ -6,9 +6,10 @@ import {
   Cpu,
   BookOpen,
   CheckCircle2,
+  ShieldAlert,
 } from "lucide-react";
 
-export type ResearchTab = "pipeline" | "interpretability" | "benchmarks" | "architecture";
+export type ResearchTab = "pipeline" | "interpretability" | "benchmarks" | "architecture" | "soc";
 
 interface SidebarProps {
   currentTab: ResearchTab;
@@ -45,6 +46,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: "Model Architecture",
       subtitle: "Figure 3 & Multi-Path ViT",
       icon: Cpu,
+    },
+    {
+      id: "soc" as ResearchTab,
+      label: "SOC Operations & Logs",
+      subtitle: "Live Nodes, Threats & Logs",
+      icon: ShieldAlert,
     },
   ];
 

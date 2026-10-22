@@ -36,6 +36,7 @@ if CURR_DIR not in sys.path:
 
 import numpy as np
 import pandas as pd
+import torch
 from PIL import Image
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -256,6 +257,39 @@ def attention_image(idx: int):
     _last_composites[idx].save(buf, format="PNG")
     buf.seek(0)
     return StreamingResponse(buf, media_type="image/png")
+
+class BenchmarkRequest(BaseModel):
+    batch_size: int = 30
+
+@app.post("/api/benchmark-run")
+def benchmark_run(req: BenchmarkRequest):
+    if MODEL is None:
+        raise HTTPException(status_code=503, detail="Model not initialized.")
+    n = max(5, min(req.batch_size, 100))
+    dummy_imgs = np.random.randint(0, 255, size=(n, 35, 35, 3), dtype=np.uint8)
+    
+    t0 = time.perf_counter()
+    with torch.no_grad():
+        x = torch.from_numpy(dummy_imgs).permute(0, 3, 1, 2).float() / 255.0
+        logits = MODEL(x)
+        probs = torch.softmax(logits, dim=-1)
+    elapsed_s = time.perf_counter() - t0
+    
+    latency_per_window_ms = round((elapsed_s / n) * 1000, 2)
+    throughput_windows_sec = round(n / elapsed_s, 1)
+    throughput_flows_sec = round((n * 35) / elapsed_s, 1)
+    total_params = sum(p.numel() for p in MODEL.parameters())
+    
+    return {
+        "batch_size": n,
+        "elapsed_ms": round(elapsed_s * 1000, 1),
+        "latency_per_window_ms": latency_per_window_ms,
+        "throughput_windows_sec": throughput_windows_sec,
+        "throughput_flows_sec": throughput_flows_sec,
+        "total_parameters": total_params,
+        "device": "CPU Active (PyTorch)",
+        "model_architecture": "MEIC-ViT (6 Layers, 8 Heads, 256 Dim)",
+    }
 
 # ════════════════════════════════════════════════════════════════════════════════
 # ── CICIDS-2017 Real Dataset Analytics Endpoint ─────────────────────────────────

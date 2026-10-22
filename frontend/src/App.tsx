@@ -5,6 +5,7 @@ import { DetectionPipelineView } from "./components/DetectionPipelineView";
 import { InterpretabilityView } from "./components/InterpretabilityView";
 import { PaperBenchmarksView } from "./components/PaperBenchmarksView";
 import { ArchitectureView } from "./components/ArchitectureView";
+import { SocCenterView } from "./components/SocCenterView";
 import { API } from "./api/client";
 import "./index.css";
 
@@ -32,11 +33,12 @@ export function App() {
         {/* Academic Paper Header */}
         <Header />
 
-        {/* 4 Focused Views */}
+        {/* 5 Focused Responsive Views */}
         {currentTab === "pipeline" && <DetectionPipelineView />}
         {currentTab === "interpretability" && <InterpretabilityView />}
         {currentTab === "benchmarks" && <PaperBenchmarksView />}
         {currentTab === "architecture" && <ArchitectureView />}
+        {currentTab === "soc" && <SocCenterView />}
       </div>
     </div>
   );
