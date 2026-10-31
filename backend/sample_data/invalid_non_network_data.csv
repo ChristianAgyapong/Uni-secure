@@ -1,0 +1,12 @@
+Employee_ID,Full_Name,Department,Annual_Salary,Performance_Score,City
+E101,John Doe,Marketing,65000,4.2,New York
+E102,Jane Smith,Human Resources,58000,4.8,Chicago
+E103,Robert Brown,Finance,82000,3.9,Dallas
+E104,Emily Davis,Accounting,72000,4.5,Atlanta
+E105,Michael Wilson,Sales,91000,4.7,Denver
+E106,Sarah Taylor,Customer Support,48000,4.1,Seattle
+E107,David Anderson,Operations,67000,3.8,San Francisco
+E108,Jessica Thomas,Legal,105000,4.9,Boston
+E109,James Jackson,Procurement,62000,4.0,Houston
+E110,Amanda White,Supply Chain,74000,4.3,Phoenix
+

@@ -129,10 +129,15 @@ const ThreatBar: React.FC<{ label: string; count: number; total: number; color: 
   };
 
 /* ─── Window row ───────────────────────────────────────────────────────────── */
+const isBenignPrediction = (pred: string) => {
+  const p = (pred || "").toUpperCase();
+  return p.startsWith("BENIGN") || p.startsWith("NORMAL");
+};
+
 const WindowRow: React.FC<{ w: WindowResult; isSelected: boolean; onClick: () => void; idx: number }> =
   ({ w, isSelected, onClick, idx }) => {
     const meta = getThreatMeta(w.threat_level);
-    const isAttack = !w.prediction.toUpperCase().startsWith("BENIGN");
+    const isAttack = !isBenignPrediction(w.prediction);
     return (
       <tr
         onClick={onClick}
@@ -174,6 +179,21 @@ const WindowRow: React.FC<{ w: WindowResult; isSelected: boolean; onClick: () =>
               {(w.confidence * 100).toFixed(0)}%
             </span>
           </div>
+        </td>
+        <td style={{ padding: "7px 8px" }}>
+          {w.confidence_status === "CONFIRMED" ? (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, background: "rgba(16,185,129,0.15)", color: "#10b981", border: "1px solid rgba(16,185,129,0.3)" }}>
+              CONFIRMED
+            </span>
+          ) : w.confidence_status === "EVALUATING" ? (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, background: "rgba(245,158,11,0.15)", color: "#f59e0b", border: "1px solid rgba(245,158,11,0.3)" }}>
+              EVALUATING
+            </span>
+          ) : (
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3, background: "rgba(148,163,184,0.12)", color: "#94a3b8", border: "1px solid rgba(148,163,184,0.25)" }}>
+              PROVISIONAL
+            </span>
+          )}
         </td>
         <td style={{ padding: "7px 8px", fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-dim)" }}>
           {w.ground_truth ? (
@@ -257,7 +277,7 @@ export const DetectionPipelineView: React.FC = () => {
     if (!result) return;
     const report = {
       timestamp: new Date().toISOString(),
-      classifier: "MEIC-ViT (Xiao et al., Computer Networks 2026)",
+      classifier: "UniSecure Vision AI Threat Defense Engine",
       summary: {
         total_windows: windows.length,
         attack_windows: attackWindows.length,
@@ -288,13 +308,15 @@ export const DetectionPipelineView: React.FC = () => {
 
   /* ── Derived metrics ──────────────────────────────────────────────────────── */
   const windows = result?.windows ?? [];
-  const attackWindows = windows.filter(w => !w.prediction.toUpperCase().startsWith("BENIGN"));
-  const benignWindows = windows.filter(w => w.prediction.toUpperCase().startsWith("BENIGN"));
+  const attackWindows = windows.filter(w => !isBenignPrediction(w.prediction));
+  const benignWindows = windows.filter(w => isBenignPrediction(w.prediction));
   const avgConf = windows.length > 0 ? windows.reduce((a, w) => a + w.confidence, 0) / windows.length : 0;
-  const topThreat = result?.highest_threat ?? "—";
-  const topThreatMeta = getThreatMeta(
-    attackWindows.length > 0 ? (attackWindows[0].threat_level) : "LOW"
+  const topThreat = result?.highest_threat ?? (
+    attackWindows.length > 0 ? attackWindows[0].threat_level : "LOW"
   );
+  const topThreatMeta = getThreatMeta(topThreat);
+  // Accurate attack count from backend (excludes benign); fallback to frontend filter count
+  const attackCount = result?.n_attack_windows ?? attackWindows.length;
 
   /* Threat class distribution (sorted by count) */
   const classDist: Array<{ label: string; count: number; level: string; color: string }> = [];
@@ -313,7 +335,13 @@ export const DetectionPipelineView: React.FC = () => {
   /* Filtered window list */
   const filteredWindows = filterLevel === "ALL"
     ? windows
-    : windows.filter(w => filterLevel === "ATTACK" ? !w.prediction.toUpperCase().startsWith("BENIGN") : w.threat_level === filterLevel);
+    : filterLevel === "CONFIRMED"
+    ? windows.filter(w => w.confidence_status === "CONFIRMED" || (w.is_persistent && !isBenignPrediction(w.prediction)))
+    : filterLevel === "ATTACK"
+    ? windows.filter(w => !isBenignPrediction(w.prediction))
+    : filterLevel === "LOW"
+    ? windows.filter(w => w.threat_level === "LOW" || isBenignPrediction(w.prediction))
+    : windows.filter(w => w.threat_level === filterLevel);
 
   /* ── Render ───────────────────────────────────────────────────────────────── */
   return (
@@ -339,8 +367,8 @@ export const DetectionPipelineView: React.FC = () => {
               );
             })}
           </div>
-          <div style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-            MEIC-ViT · 35×35 RGB · Algorithm 1
+          <div style={{ fontSize: 10, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+            35-FLOW IMAGE SLICING · REAL-TIME INFERENCE
           </div>
         </div>
 
@@ -349,7 +377,7 @@ export const DetectionPipelineView: React.FC = () => {
           <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 260 }}>
               <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                Traffic Capture Sample
+                Traffic Capture Scenario
               </label>
               <select
                 className="logs-filter-select"
@@ -357,10 +385,21 @@ export const DetectionPipelineView: React.FC = () => {
                 value={selectedPreset}
                 onChange={(e) => setSelectedPreset(e.target.value)}
               >
-                <option value="DDoS Attack Sample">🔴 DDoS Volumetric Flood (CICIDS-2017)</option>
-                <option value="Port Scan Probe">🟠 PortScan Reconnaissance Sweep</option>
-                <option value="Benign Traffic">🟢 Benign Normal Baseline Traffic</option>
-                <option value="Mixed Attack Traffic">🔴 Multi-Vector Attack Mixture</option>
+                <optgroup label="CICIDS-2017 Scenarios">
+                  <option value="DDoS Attack Sample">🔴 Volumetric DDoS SYN Flood Attack</option>
+                  <option value="Port Scan Probe">🟠 PortScan Host Reconnaissance Sweep</option>
+                  <option value="Benign Traffic">🟢 Normal Enterprise Baseline Traffic</option>
+                  <option value="Mixed Attack Traffic">🔴 Multi-Vector Attack Mixture</option>
+                </optgroup>
+                <optgroup label="UNSW-NB15 Scenarios">
+                  <option value="UNSW Exploits Sample">🔴 UNSW Exploits Threat (98% Conf)</option>
+                  <option value="UNSW Generic Sample">🔴 UNSW Generic Payload Injection (95% Conf)</option>
+                  <option value="UNSW Worms Sample">🔴 UNSW Worms Critical Propagation</option>
+                  <option value="UNSW Normal Baseline">🟢 UNSW Clean Enterprise Baseline</option>
+                </optgroup>
+                <optgroup label="Combined Cross-Dataset Benchmark">
+                  <option value="Dual-Dataset Cross Benchmark">⚡ Dual-Dataset Mixed Traffic (CICIDS + UNSW Combined)</option>
+                </optgroup>
               </select>
             </div>
             <button
@@ -383,12 +422,23 @@ export const DetectionPipelineView: React.FC = () => {
                 Attack Vector
               </label>
               <select className="logs-filter-select" style={{ width: "100%", marginTop: 5 }} value={streamAttack} onChange={(e) => setStreamAttack(e.target.value)}>
-                <option value="DDoS Attack">DDoS SYN Flood</option>
-                <option value="PortScan Probe">PortScan Recon Sweep</option>
-                <option value="Botnet C2 Beaconing">Botnet C2 Beaconing</option>
-                <option value="Heartbleed Exploit">OpenSSL Heartbleed Exploit</option>
-                <option value="Web SQL Injection">SQL Injection Probe</option>
-                <option value="Normal Traffic">Benign Baseline</option>
+                <optgroup label="CICIDS-2017 Real Attacks">
+                  <option value="DDoS Attack">DDoS SYN Flood</option>
+                  <option value="PortScan Probe">PortScan Recon Sweep</option>
+                  <option value="Botnet C2 Beaconing">Botnet C2 Beaconing</option>
+                  <option value="Heartbleed Exploit">OpenSSL Heartbleed Exploit</option>
+                  <option value="Web SQL Injection">SQL Injection Probe</option>
+                  <option value="Normal Traffic">CICIDS Benign Baseline</option>
+                </optgroup>
+                <optgroup label="UNSW-NB15 Benchmark Attacks">
+                  <option value="UNSW Exploits">UNSW Exploits (98% Conf)</option>
+                  <option value="UNSW Generic">UNSW Generic Payload (95% Conf)</option>
+                  <option value="UNSW Fuzzers">UNSW Protocol Fuzzers</option>
+                  <option value="UNSW DoS">UNSW Denial-of-Service</option>
+                  <option value="UNSW Worms">UNSW Worms Propagation</option>
+                  <option value="UNSW Reconnaissance">UNSW Reconnaissance Sweep</option>
+                  <option value="UNSW Normal">UNSW Normal Baseline (98% Conf)</option>
+                </optgroup>
               </select>
             </div>
             <div style={{ minWidth: 160 }}>
@@ -399,7 +449,7 @@ export const DetectionPipelineView: React.FC = () => {
                 onChange={(e) => setStreamFlows(Number(e.target.value))}
                 style={{ width: "100%", marginTop: 8, accentColor: "var(--accent-cyan)" }} />
             </div>
-            <button className="btn-primary-soc" style={{ height: 36, paddingInline: 20 }} disabled={loading} onClick={runStream}>
+            <button className="btn-primary-soc" style={{ height: 36, paddingInline: 20 }} disabled={loading} onClick={() => runStream()}>
               {loading ? <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} /> : <Zap size={14} />}
               <span>{loading ? "Injecting…" : "Inject & Detect"}</span>
             </button>
@@ -411,7 +461,7 @@ export const DetectionPipelineView: React.FC = () => {
           <form onSubmit={runUpload} style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
             <div style={{ flex: 1 }}>
               <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.6 }}>
-                CICFlowMeter CSV (35 flow features)
+                Network Flow Traffic Capture (.csv)
               </label>
               <div style={{
                 marginTop: 5, border: "2px dashed var(--border)", borderRadius: 7, padding: "12px 16px",
@@ -442,9 +492,10 @@ export const DetectionPipelineView: React.FC = () => {
           {[
             { label: "DDoS SYN Flood", icon: "🔴", attack: "DDoS Attack" },
             { label: "PortScan Recon", icon: "🟠", attack: "PortScan Probe" },
-            { label: "Botnet C2 Beacon", icon: "🔴", attack: "Botnet C2 Beaconing" },
-            { label: "Heartbleed Exploit", icon: "🔴", attack: "Heartbleed Exploit" },
-            { label: "SQL Injection", icon: "🟠", attack: "Web SQL Injection" },
+            { label: "UNSW Exploits", icon: "🔴", attack: "UNSW Exploits" },
+            { label: "UNSW Generic", icon: "🔴", attack: "UNSW Generic" },
+            { label: "UNSW Worms", icon: "🔴", attack: "UNSW Worms" },
+            { label: "UNSW Normal", icon: "🟢", attack: "UNSW Normal" },
             { label: "Benign Baseline", icon: "🟢", attack: "Normal Traffic" },
           ].map((item) => (
             <button
@@ -531,18 +582,18 @@ export const DetectionPipelineView: React.FC = () => {
             <KpiCard
               label="Primary Threat"
               value={topThreat.length > 14 ? topThreat.slice(0, 13) + "…" : topThreat}
-              sub={attackWindows.length > 0 ? attackWindows[0].threat_level : "BENIGN"}
+              sub={attackCount > 0 ? `${attackCount} hostile windows detected` : "Network Clear"}
               color={topThreatMeta.color}
               icon={<ShieldX size={16} color={topThreatMeta.color} />}
-              pulse={attackWindows.length > 0}
+              pulse={attackCount > 0}
             />
             <KpiCard
               label="Attack Windows"
-              value={attackWindows.length}
-              sub={`of ${windows.length} total (${windows.length > 0 ? ((attackWindows.length / windows.length) * 100).toFixed(0) : 0}%)`}
-              color={attackWindows.length > 0 ? "#ef4444" : "#10b981"}
-              icon={<Target size={16} color={attackWindows.length > 0 ? "#ef4444" : "#10b981"} />}
-              pulse={attackWindows.length > 0}
+              value={attackCount}
+              sub={`${result.confirmed_threats_count ?? attackCount} confirmed • ${result.provisional_threats_count ?? 0} gated provisional`}
+              color={attackCount > 0 ? "#ef4444" : "#10b981"}
+              icon={<Target size={16} color={attackCount > 0 ? "#ef4444" : "#10b981"} />}
+              pulse={attackCount > 0}
             />
             <KpiCard
               label="Model Confidence"
@@ -561,7 +612,7 @@ export const DetectionPipelineView: React.FC = () => {
           </div>
 
           {/* ── Alert Banner (critical / high only) ────────────────────────── */}
-          {attackWindows.length > 0 && (
+          {attackCount > 0 && (
             <div style={{
               background: `linear-gradient(135deg, ${topThreatMeta.bg}, rgba(8,16,32,0.9))`,
               border: `1px solid ${topThreatMeta.border}`,
@@ -576,9 +627,9 @@ export const DetectionPipelineView: React.FC = () => {
                   🚨 INTRUSION DETECTED — {topThreat}
                 </div>
                 <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-                  {attackWindows.length} malicious traffic windows detected •{" "}
-                  {((attackWindows.length / windows.length) * 100).toFixed(1)}% of analyzed flows are hostile •{" "}
-                  Threat Level: <strong style={{ color: topThreatMeta.color }}>{topThreatMeta.color === "#ef4444" ? "CRITICAL" : "HIGH"}</strong>
+                  {attackCount} malicious traffic windows detected •{" "}
+                  {windows.length > 0 ? ((attackCount / windows.length) * 100).toFixed(1) : "0.0"}% of analyzed flows are hostile •{" "}
+                  Threat Level: <strong style={{ color: topThreatMeta.color }}>{topThreat}</strong>
                 </div>
               </div>
 
@@ -632,7 +683,7 @@ export const DetectionPipelineView: React.FC = () => {
                 fontSize: 22, fontWeight: 900, fontFamily: "var(--font-mono)",
                 color: topThreatMeta.color, letterSpacing: -1,
               }}>
-                {attackWindows.length > 0 ? attackWindows[0].threat_level : "LOW"}
+                {topThreat}
               </div>
             </div>
           )}
@@ -654,7 +705,7 @@ export const DetectionPipelineView: React.FC = () => {
           )}
 
           {/* ── Main Two-Column ─────────────────────────────────────────────── */}
-          <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16, alignItems: "start" }}>
+          <div className="pipeline-results-grid" style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 16, alignItems: "start" }}>
 
             {/* Left: Window Audit Table */}
             <div className="panel" style={{ padding: 0, overflow: "hidden" }}>
@@ -663,8 +714,8 @@ export const DetectionPipelineView: React.FC = () => {
                   <BarChart3 size={15} color="var(--accent-cyan)" />
                   <span>Per-Window Threat Audit ({windows.length} slices)</span>
                 </div>
-                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
-                  {["ALL", "ATTACK", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((f) => (
+                <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap", alignItems: "center" }}>
+                  {["ALL", "CONFIRMED", "ATTACK", "CRITICAL", "HIGH", "MEDIUM", "LOW"].map((f) => (
                     <button
                       key={f}
                       onClick={() => setFilterLevel(f)}
@@ -677,12 +728,15 @@ export const DetectionPipelineView: React.FC = () => {
                         transition: "all 0.15s",
                       }}
                     >
-                      {f}
+                      {f === "CONFIRMED" ? "CONFIRMED ONLY (≥60%)" : f}
                     </button>
                   ))}
+                  <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                    🛡️ Gating: 60% Threshold
+                  </span>
                 </div>
               </div>
-              <div style={{ maxHeight: 360, overflowY: "auto" }}>
+              <div style={{ maxHeight: 360, overflowX: "auto", overflowY: "auto" }}>
                 <table className="sensor-table" style={{ fontSize: 12 }}>
                   <thead>
                     <tr>
@@ -690,6 +744,7 @@ export const DetectionPipelineView: React.FC = () => {
                       <th style={{ padding: "7px 8px" }}>PREDICTION</th>
                       <th style={{ padding: "7px 8px" }}>LEVEL</th>
                       <th style={{ padding: "7px 8px" }}>CONF</th>
+                      <th style={{ padding: "7px 8px" }}>STATUS</th>
                       <th style={{ padding: "7px 8px" }}>GROUND TRUTH</th>
                     </tr>
                   </thead>
@@ -705,7 +760,7 @@ export const DetectionPipelineView: React.FC = () => {
                     ))}
                     {filteredWindows.length === 0 && (
                       <tr>
-                        <td colSpan={5} style={{ textAlign: "center", padding: 24, color: "var(--text-dim)", fontSize: 12 }}>
+                        <td colSpan={6} style={{ textAlign: "center", padding: 24, color: "var(--text-dim)", fontSize: 12 }}>
                           No windows match this filter
                         </td>
                       </tr>
@@ -755,13 +810,30 @@ export const DetectionPipelineView: React.FC = () => {
                     border: `1px solid ${getThreatMeta(selectedWindow.threat_level).border}`,
                     borderRadius: 7, padding: "10px 14px", marginBottom: 12,
                   }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>Predicted Class</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase" }}>Predicted Class</div>
+                      {selectedWindow.confidence_status && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3,
+                          background: selectedWindow.confidence_status === "CONFIRMED" ? "rgba(16,185,129,0.2)" : "rgba(245,158,11,0.2)",
+                          color: selectedWindow.confidence_status === "CONFIRMED" ? "#10b981" : "#f59e0b",
+                          border: `1px solid ${selectedWindow.confidence_status === "CONFIRMED" ? "rgba(16,185,129,0.4)" : "rgba(245,158,11,0.4)"}`,
+                        }}>
+                          {selectedWindow.confidence_status} {selectedWindow.is_persistent ? "• PERSISTENT" : ""}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 15, fontWeight: 800, color: getThreatMeta(selectedWindow.threat_level).color, marginTop: 2 }}>
                       {selectedWindow.prediction}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
                       Confidence: {(selectedWindow.confidence * 100).toFixed(1)}%
                     </div>
+                    {selectedWindow.confidence_status !== "CONFIRMED" && selectedWindow.threat_level !== "LOW" && (
+                      <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 6, lineHeight: 1.3, background: "rgba(245,158,11,0.08)", padding: "4px 8px", borderRadius: 4 }}>
+                        ℹ️ <strong>Early Boundary Slice (&lt;60% Conf):</strong> Gated provisional to prevent false alerts until consecutive windows confirm attack persistence.
+                      </div>
+                    )}
                   </div>
 
                   {/* Top-5 softmax bars */}
@@ -850,7 +922,7 @@ export const DetectionPipelineView: React.FC = () => {
             <div style={{ display: "flex", gap: 3, overflowX: "auto", paddingBottom: 6 }}>
               {windows.map((w) => {
                 const m = getThreatMeta(w.threat_level);
-                const isAtk = !w.prediction.toUpperCase().startsWith("BENIGN");
+                const isAtk = !isBenignPrediction(w.prediction);
                 const isSel = selectedWindow?.window === w.window;
                 return (
                   <div

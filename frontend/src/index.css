@@ -376,6 +376,90 @@ body {
   padding: 20px;
   position: relative;
 }
+
+@media (max-width: 900px) {
+  .soc-shell {
+    flex-direction: column;
+  }
+
+  .soc-sidebar {
+    width: 100%;
+    min-width: 0;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    position: relative;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    display: none !important;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 8px 12px !important;
+    scrollbar-width: thin;
+  }
+
+  .nav-item {
+    width: auto !important;
+    flex: 0 0 auto;
+    margin-bottom: 0 !important;
+    padding: 8px 10px !important;
+  }
+
+  .nav-item > div:first-child > div > span:last-child {
+    display: none;
+  }
+
+  .soc-header {
+    height: auto !important;
+    min-height: 64px;
+    padding: 12px 16px !important;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .soc-header > div:first-child {
+    max-width: 100%;
+  }
+
+  .soc-header > div:last-child {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+
+  .soc-content {
+    padding: 16px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .soc-header > div:first-child > div > div:last-child > span:last-child {
+    display: none;
+  }
+
+  .pipeline-results-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .soc-content {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .panel {
+    padding: 14px;
+  }
+}
 .panel-header {
   display: flex;
   align-items: center;

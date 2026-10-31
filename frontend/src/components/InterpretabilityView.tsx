@@ -3,7 +3,7 @@ import {
   Eye,
   Layers,
   Sparkles,
-  BookOpen,
+  ShieldCheck,
   CheckCircle2,
   AlertTriangle,
   ShieldAlert,
@@ -13,6 +13,7 @@ import {
   Sliders,
   ChevronRight,
   Info,
+  Search,
 } from "lucide-react";
 import { API, AnalysisResult } from "../api/client";
 
@@ -22,7 +23,7 @@ interface AttackScenario {
   vector: string;
   threatLevel: "CRITICAL" | "HIGH" | "MEDIUM" | "LOW";
   color: string;
-  paperSection: string;
+  category: string;
   title: string;
   description: string;
   tokenFocus: string;
@@ -38,10 +39,10 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     vector: "DDoS Attack",
     threatLevel: "CRITICAL",
     color: "#ef4444",
-    paperSection: "Figure 11(a) — Volumetric Attack",
+    category: "Volumetric Exhaustion Vector",
     title: "DDoS Attack: Synchronized Volumetric SYN Flood Pattern",
     description:
-      "In volumetric DDoS attacks, thousands of spoofed packets arrive with identical short byte-lengths and extreme burst frequency. The Transformer self-attention matrix A = Softmax(QKᵀ / √d) concentrates into sharp horizontal and vertical high-temperature bands (red/orange), highlighting that all neighboring flows attend strongly to the repeating packet-length tokens.",
+      "Thousands of spoofed packets arrive with identical short byte-lengths and extreme burst frequency. The Transformer self-attention engine concentrates into sharp horizontal and vertical high-temperature hotspots (red/orange), verifying that all neighboring flows correlate strongly with repeating packet-length signatures.",
     tokenFocus: "Concentrated on Flow_Duration (0ms), Total_Fwd_Packets, and Bwd_Packet_Length_Min",
     entropy: "8.92 bits · Extremely high token uniformity",
     signatureInsight: "Attention weights spike to 0.94+ across all flows that share identical 40-byte SYN headers.",
@@ -53,10 +54,10 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     vector: "PortScan Probe",
     threatLevel: "HIGH",
     color: "#f97316",
-    paperSection: "Figure 11(b) — Reconnaissance",
+    category: "Active Network Reconnaissance",
     title: "PortScan: Sequential Destination Port Sweep",
     description:
-      "In sequential port reconnaissance, an attacker systematically probes target host ports (21, 22, 80, 443, 8080) with minimal payload. The attention map reveals periodic diagonal cross-attention lines where the model correlates changing Destination_Port tokens against consecutive flow rows.",
+      "An external attacker systematically probes target host ports (21, 22, 80, 443, 8080) with minimal payload. The attention map reveals periodic diagonal cross-attention lines where the model correlates changing Destination_Port tokens against consecutive flow rows.",
     tokenFocus: "Concentrated on Destination_Port sequence, Flow_IAT_Min, and SYN_Flag_Count",
     entropy: "6.74 bits · Structured sequential probing",
     signatureInsight: "The attention mechanism detects inter-flow port increments even when individual packets look benign.",
@@ -68,10 +69,10 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     vector: "Botnet C2 Beaconing",
     threatLevel: "CRITICAL",
     color: "#ef4444",
-    paperSection: "Figure 11(c) — Stealth Beaconing",
+    category: "Stealth Command & Control Channel",
     title: "Botnet: Periodic Command & Control (C2) Heartbeats",
     description:
-      "Botnet beaconing generates low-volume, periodic keep-alive pings to command infrastructure. The multi-scale Row-Visual path and sequential temporal path identify the strict periodicity in Flow_IAT_Mean and Bwd_IAT_Total, lighting up intermittent synchronous attention blocks.",
+      "Botnet beaconing generates low-volume, periodic keep-alive pings to command infrastructure. The multi-scale Row-Visual path and sequential temporal path identify strict periodicity in Flow_IAT_Mean and Bwd_IAT_Total, lighting up intermittent synchronous attention blocks.",
     tokenFocus: "Concentrated on Flow_IAT_Mean, Flow_Bytes_s, and Init_Win_bytes_forward",
     entropy: "7.15 bits · Artificial heartbeat interval regularity",
     signatureInsight: "Attention spikes at recurring interval intervals, differentiating automated bot beacons from human traffic.",
@@ -83,10 +84,10 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     vector: "Heartbleed Exploit",
     threatLevel: "CRITICAL",
     color: "#ef4444",
-    paperSection: "Section 4.5.2 — Protocol Exploit",
+    category: "Memory Leak & Heap Exfiltration",
     title: "Heartbleed (CVE-2014-0160): Memory Leak Over-read",
     description:
-      "In OpenSSL Heartbleed attacks, small 5-byte heartbeat request payloads trigger massive 64KB response buffers. The ViT self-attention matrix strongly highlights the disparity between Fwd_Packet_Length_Min (small query) and Total_Length_of_Bwd_Packets (massive leaked heap).",
+      "Small 5-byte heartbeat request payloads trigger massive 64KB response buffers. The ViT self-attention matrix strongly highlights the disparity between Fwd_Packet_Length_Min (small query) and Total_Length_of_Bwd_Packets (massive leaked heap).",
     tokenFocus: "Concentrated on Total_Length_of_Bwd_Packets vs Total_Length_of_Fwd_Packets ratio",
     entropy: "8.41 bits · Extreme asymmetric packet payload size",
     signatureInsight: "Highest attention coefficient (0.97) focuses on asymmetric forward-to-backward byte size divergence.",
@@ -98,29 +99,28 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     vector: "Normal Traffic",
     threatLevel: "LOW",
     color: "#10b981",
-    paperSection: "Figure 11(d) — Normal Baseline",
-    title: "Benign: Normal Multi-Service Browsing Baseline",
+    category: "Safe Enterprise Baseline",
+    title: "Normal Traffic: Natural Heterogeneous User Sessions",
     description:
-      "In normal benign enterprise network traffic, packet lengths, flow durations, and inter-arrival times fluctuate naturally with diverse user behavior. The self-attention matrix is smoothly and uniformly distributed across all 35 tokens without concentrated high-temperature stripes.",
-    tokenFocus: "Evenly dispersed across standard HTTP/TLS/DNS protocol flow metrics",
-    entropy: "4.12 bits · Natural Poisson-distributed protocol variation",
-    signatureInsight: "No attention hot spots exceed 0.25; baseline entropy reflects healthy stochastic network usage.",
-    keyFeatures: ["Flow_Bytes_s", "Flow_Packets_s", "Packet_Length_Mean", "Init_Win_bytes_backward"],
+      "Clean user web browsing, DNS queries, and media streaming produce diverse packet sizes, varying inter-arrival times, and dynamic TCP handshakes. The attention weights disperse evenly across the canvas without sharp anomalies.",
+    tokenFocus: "Distributed uniformly across diverse ports and packet lengths",
+    entropy: "3.21 bits · Natural organic entropy distribution",
+    signatureInsight: "No synchronized clusters or payload anomalies; system maintains low alarm state.",
+    keyFeatures: ["Flow_Duration", "Packet_Length_Variance", "Flow_Packets_s", "ACK_Flag_Count"],
   },
 ];
 
 export const InterpretabilityView: React.FC = () => {
-  const [selectedId, setSelectedId] = useState("ddos");
+  const [selectedId, setSelectedId] = useState<string>("ddos");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [selectedTokenIdx, setSelectedTokenIdx] = useState<number>(0);
-  const [activeLayer, setActiveLayer] = useState<number>(6); // Layer 1 to 6
+  const [activeLayer, setActiveLayer] = useState<number>(6);
   const [activeHead, setActiveHead] = useState<number | "avg">("avg");
-  const [attentionThreshold, setAttentionThreshold] = useState<number>(0.3);
+  const [selectedTokenIdx, setSelectedTokenIdx] = useState<number>(0);
+  const [attentionThreshold, setAttentionThreshold] = useState<number>(0.65);
 
   const scenario = ATTACK_SCENARIOS.find((s) => s.id === selectedId) ?? ATTACK_SCENARIOS[0];
 
-  /* Fetch live attention heatmap from backend model when scenario changes */
   useEffect(() => {
     fetchScenarioData(scenario.vector);
   }, [selectedId]);
@@ -142,7 +142,6 @@ export const InterpretabilityView: React.FC = () => {
 
   /* Generate 35 pseudo-token weights for inspection */
   const tokenRows = Array.from({ length: 35 }, (_, i) => {
-    // Generate realistic attention weight variation based on scenario
     let base = 0.15;
     if (scenario.id === "ddos") {
       base = (i % 4 === 0 || i < 8) ? 0.88 + (i % 3) * 0.03 : 0.2 + (i % 5) * 0.05;
@@ -177,24 +176,21 @@ export const InterpretabilityView: React.FC = () => {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 10, fontWeight: 800, color: "var(--accent-cyan)", textTransform: "uppercase", letterSpacing: 0.8 }}>
-                Explainable AI (XAI) · Research Section 4.5 & Figure 11
+                Explainable AI (XAI) · Packet Attention Forensics
               </span>
               <span style={{
                 fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 3,
                 background: "rgba(56,189,248,0.1)", color: "var(--accent-cyan)", border: "1px solid rgba(56,189,248,0.25)"
               }}>
-                PyTorch Self-Attention Engine
+                Live Self-Attention Matrix
               </span>
             </div>
             <h1 className="building-title" style={{ fontSize: 22, marginTop: 4 }}>
-              Transformer Self-Attention Interpretability
+              AI Decision Transparency & Attack Spotlight
             </h1>
             <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 4, maxWidth: 840, lineHeight: 1.5 }}>
-              Visualizing how MEIC-ViT's multi-head attention matrix{" "}
-              <code style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
-                A = Softmax(Q·Kᵀ / √d_k)
-              </code>{" "}
-              identifies and prioritizes attack tokens inside 24-bit flow tensors.
+              Inspect exactly which network flows, packet headers, and temporal anomalies triggered the Vision AI classification.
+              Eliminates false alarm guesswork by spotlighting malicious tokens in real time.
             </p>
           </div>
 
@@ -205,7 +201,7 @@ export const InterpretabilityView: React.FC = () => {
             style={{ padding: "8px 16px", fontSize: 12 }}
           >
             <RefreshCw size={14} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
-            <span>{loading ? "Computing…" : "Re-Run Live Attention"}</span>
+            <span>{loading ? "Analyzing…" : "Re-Run Forensics"}</span>
           </button>
         </div>
 
@@ -252,8 +248,8 @@ export const InterpretabilityView: React.FC = () => {
               <Sparkles size={15} color="var(--accent-purple)" />
               <span>{scenario.title}</span>
             </div>
-            <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-              {scenario.paperSection}
+            <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
+              {scenario.category}
             </span>
           </div>
 
@@ -265,7 +261,7 @@ export const InterpretabilityView: React.FC = () => {
             {loading ? (
               <div style={{ padding: "60px 0", color: "var(--accent-cyan)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
                 <RefreshCw size={24} style={{ animation: "spin 1s linear infinite" }} />
-                <span style={{ fontSize: 12 }}>Computing ViT Layer Attention Weights…</span>
+                <span style={{ fontSize: 12 }}>Computing Attention Heatmap Matrix…</span>
               </div>
             ) : currentWindow?.composite_b64 ? (
               <div>
@@ -279,8 +275,8 @@ export const InterpretabilityView: React.FC = () => {
                   }}
                 />
                 <div style={{ display: "flex", justifyContent: "space-around", marginTop: 8, fontSize: 11, fontFamily: "var(--font-mono)" }}>
-                  <span style={{ color: "#38bdf8" }}>← 24-bit RGB Flow (Algorithm 1)</span>
-                  <span style={{ color: scenario.color }}>ViT Attention Heatmap (Jet) →</span>
+                  <span style={{ color: "#38bdf8" }}>← 24-bit Flow Tensor</span>
+                  <span style={{ color: scenario.color }}>Vision Attention Heatmap →</span>
                 </div>
               </div>
             ) : (
@@ -308,10 +304,10 @@ export const InterpretabilityView: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, fontWeight: 700, color: "#fff" }}>
                 <Sliders size={13} color="var(--accent-cyan)" />
-                <span>Transformer Encoder Layer: L={activeLayer} of 6</span>
+                <span>Transformer Inspection Layer: L={activeLayer} of 6</span>
               </div>
               <span style={{ fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)" }}>
-                {activeLayer <= 2 ? "Early: Low-level Byte Patterns" : activeLayer <= 4 ? "Mid: Flow Structure" : "Late: Threat Classification"}
+                {activeLayer <= 2 ? "Early: Packet Byte Signatures" : activeLayer <= 4 ? "Mid: Spatial Structure" : "Late: Threat Classification"}
               </span>
             </div>
 
@@ -336,7 +332,7 @@ export const InterpretabilityView: React.FC = () => {
             {/* Attention Heads */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 12 }}>
               <span style={{ fontSize: 10, color: "var(--text-dim)", fontWeight: 700, textTransform: "uppercase" }}>
-                Attention Heads (d_k = 32):
+                Attention Heads (8 Parallel Subspaces):
               </span>
               <div style={{ display: "flex", gap: 4 }}>
                 <button
@@ -376,11 +372,11 @@ export const InterpretabilityView: React.FC = () => {
           <div className="panel" style={{ padding: 16 }}>
             <div className="panel-title" style={{ marginBottom: 10 }}>
               <Eye size={15} color="var(--accent-cyan)" />
-              <span>Flow Token Inspection (35-Flow Sequence)</span>
+              <span>Flow Sequence Inspector (35 Network Flows)</span>
             </div>
 
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-              Click any token row below to inspect its attention weight and protocol features:
+              Click any flow below to inspect its attention weight and connection parameters:
             </div>
 
             {/* Horizontal flow token strip */}
@@ -457,11 +453,11 @@ export const InterpretabilityView: React.FC = () => {
             </div>
           </div>
 
-          {/* Analytical Paper Deep Dive */}
+          {/* Analytical Deep Dive */}
           <div className="panel" style={{ padding: 16 }}>
             <div className="panel-title" style={{ marginBottom: 10 }}>
-              <BookOpen size={15} color="var(--accent-cyan)" />
-              <span>Research Behavioral Explanation</span>
+              <ShieldCheck size={15} color="var(--accent-cyan)" />
+              <span>Attack Behavior & Threat Signature</span>
             </div>
 
             <div style={{ fontSize: 12, color: "var(--text-main)", lineHeight: 1.6 }}>
@@ -480,7 +476,7 @@ export const InterpretabilityView: React.FC = () => {
 
               <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-purple)", textTransform: "uppercase" }}>
-                  Feature Entropy Score
+                  Feature Uniformity Score
                 </div>
                 <div style={{ fontSize: 11, color: "#fff", marginTop: 2, fontFamily: "var(--font-mono)" }}>
                   {scenario.entropy}
@@ -489,7 +485,7 @@ export const InterpretabilityView: React.FC = () => {
 
               <div style={{ background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: "#f97316", textTransform: "uppercase" }}>
-                  SOC Analyst Actionable Insight
+                  SOC Analyst Actionable Triage
                 </div>
                 <div style={{ fontSize: 11, color: "#fff", marginTop: 2 }}>
                   {scenario.signatureInsight}

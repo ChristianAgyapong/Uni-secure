@@ -26,6 +26,7 @@ wheels/
 
 # Heavy dataset files (>100MB exceeds GitHub push limits)
 backend/sample_data/dataset/
+backend/sample_data/UNSW-NB15/
 *.pcap
 *.pcap_ISCX.csv
 

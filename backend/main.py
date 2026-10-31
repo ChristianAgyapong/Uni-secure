@@ -47,10 +47,14 @@ from pydantic import BaseModel
 # ── local modules ──────────────────────────────────────────────────────────────
 from pipeline import (
     load_artifacts,
+    load_unsw_artifacts,
+    is_unsw_dataset,
     to_windows,
     predict_with_attention,
     simulate_traffic_stream,
     THREAT_LEVELS,
+    THREAT_LEVELS_UNSW,
+    UNSW_CLASSES,
 )
 
 # ── App setup ──────────────────────────────────────────────────────────────────
@@ -81,6 +85,18 @@ except Exception as e:
     print(f"[WARN] Model load failed: {e}", flush=True)
     MODEL, META, TRAINED, CLASSES = None, {}, False, []
 
+# ── Load UNSW-NB15 model at startup ───────────────────────────────────────────
+print("Loading UNSW-NB15 MEIC-ViT model...", flush=True)
+try:
+    MODEL_UNSW, META_UNSW, TRAINED_UNSW = load_unsw_artifacts(device="cpu")
+    if TRAINED_UNSW:
+        print(f"UNSW-NB15 model loaded successfully. Classes: {len(UNSW_CLASSES)}", flush=True)
+    else:
+        print("[WARN] UNSW-NB15 artifacts not found — UNSW inference disabled.", flush=True)
+except Exception as e:
+    print(f"[WARN] UNSW-NB15 model load failed: {e}", flush=True)
+    MODEL_UNSW, META_UNSW, TRAINED_UNSW = None, None, False
+
 # In-memory cache for last inference results
 _last_composites: list[Image.Image] = []
 _last_predictions: list[dict] = []
@@ -90,6 +106,13 @@ SAMPLE_FILES = {
     "Port Scan Probe":         "sample_portscan_traffic.csv",
     "Benign Traffic":          "sample_benign_traffic.csv",
     "Mixed Attack Traffic":    "sample_mixed_attack_traffic.csv",
+    "Heartbleed Exploit":      "sample_heartbleed_traffic.csv",
+    "Web SQL Injection":       "sample_sqlinjection_traffic.csv",
+    "UNSW Exploits Sample":    "sample_unsw_exploits.csv",
+    "UNSW Generic Sample":     "sample_unsw_generic.csv",
+    "UNSW Worms Sample":       "sample_unsw_worms.csv",
+    "UNSW Normal Baseline":    "sample_unsw_normal.csv",
+    "Dual-Dataset Cross Benchmark": "sample_dual_dataset_mixed.csv",
 }
 
 # SOC state
@@ -105,20 +128,31 @@ def pil_to_b64(img: Image.Image) -> str:
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
-def run_inference(df: pd.DataFrame, max_windows: int = 50):
+def run_inference(df: pd.DataFrame, max_windows: int = 50,
+                  model=None, meta=None, classes=None, threat_map=None):
     global _last_composites, _last_predictions
 
-    if MODEL is None:
+    # Default to CICIDS model
+    if model is None:
+        model = MODEL
+    if meta is None:
+        meta = META
+    if classes is None:
+        classes = CLASSES
+    if threat_map is None:
+        threat_map = THREAT_LEVELS
+
+    if model is None:
         raise RuntimeError("Model not initialized.")
 
     t0 = time.time()
-    imgs, truth = to_windows(df, META, max_windows=max_windows)
+    imgs, truth = to_windows(df, meta, max_windows=max_windows)
     imgs = imgs[:max_windows]
     if truth:
         truth = truth[:max_windows]
 
     preds, confs, threat_info, composites, probs = predict_with_attention(
-        MODEL, imgs, CLASSES, device="cpu"
+        model, imgs, classes, device="cpu", threat_levels=threat_map
     )
 
     elapsed = round(time.time() - t0, 3)
@@ -131,9 +165,42 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50):
 
     for i, (pred, conf, (lvl, col)) in enumerate(zip(preds, confs, threat_info)):
         gt = truth[i] if truth else None
-        correct = (gt == pred) if gt else None
+        
+        # Enhanced correctness with onset boundary awareness
+        correct = None
+        if gt:
+            if gt == pred:
+                correct = True
+            elif "Onset" in gt and (pred in ("BENIGN", "Normal") or pred in gt):
+                correct = True
+            else:
+                correct = False
+
+        # Confidence status gating: standard production thresholding
+        if conf >= 0.60:
+            status = "CONFIRMED"
+        elif conf >= 0.45:
+            status = "EVALUATING"
+        else:
+            status = "PROVISIONAL"
+
+        # Multi-window temporal persistence check (2-window agreement or high confidence)
+        def _is_clean(p: str) -> bool:
+            up = p.upper()
+            return up.startswith("BENIGN") or up.startswith("NORMAL")
+
+        is_attack = not _is_clean(pred)
+        is_persistent = False
+        if is_attack:
+            if conf >= 0.70:
+                is_persistent = True
+            elif i > 0 and (preds[i-1] == pred or not _is_clean(preds[i-1])) and confs[i-1] >= 0.40:
+                is_persistent = True
+            elif i < len(preds) - 1 and (preds[i+1] == pred or not _is_clean(preds[i+1])) and confs[i+1] >= 0.40:
+                is_persistent = True
+
         top5_idx = probs[i].argsort()[::-1][:5]
-        top5 = [{"label": CLASSES[j], "prob": round(float(probs[i, j]), 4)} for j in top5_idx]
+        top5 = [{"label": classes[j], "prob": round(float(probs[i, j]), 4)} for j in top5_idx]
 
         row = {
             "window": i,
@@ -143,6 +210,8 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50):
             "threat_color": col,
             "ground_truth": gt,
             "correct": correct,
+            "confidence_status": status,
+            "is_persistent": is_persistent,
             "top5": top5,
             "composite_b64": pil_to_b64(composites[i]),
         }
@@ -152,20 +221,36 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50):
         threat_counts[lvl] = threat_counts.get(lvl, 0) + 1
         class_counts[pred] = class_counts.get(pred, 0) + 1
 
+    # Only consider attack (non-benign) windows for highest threat level
+    attack_rows = [r for r in rows if not _is_clean(r["prediction"])]
+    attack_threat_counts = {}
+    for r in attack_rows:
+        lvl = r["threat_level"]
+        attack_threat_counts[lvl] = attack_threat_counts.get(lvl, 0) + 1
+
     highest_threat = max(
-        threat_counts.keys(),
+        attack_threat_counts.keys(),
         key=lambda x: ["LOW", "MEDIUM", "HIGH", "CRITICAL"].index(x) if x in ["LOW","MEDIUM","HIGH","CRITICAL"] else -1,
         default="LOW"
-    )
+    ) if attack_threat_counts else "LOW"
+
+    n_attack_windows = len(attack_rows)
+    confirmed_threats = sum(1 for r in attack_rows if r["confidence_status"] == "CONFIRMED" or r["is_persistent"])
+    provisional_threats = sum(1 for r in attack_rows if r["confidence_status"] != "CONFIRMED" and not r["is_persistent"])
+    has_anomaly = any(r["threat_level"] != "LOW" or r["confidence"] < 0.70 for r in rows)
 
     return {
         "n_flows": len(df),
         "n_windows": len(imgs),
+        "n_attack_windows": n_attack_windows,
         "elapsed_s": elapsed,
-        "trained_model": TRAINED,
+        "trained_model": TRAINED_UNSW if (model is MODEL_UNSW) else TRAINED,
         "highest_threat": highest_threat,
         "threat_counts": threat_counts,
         "class_counts": class_counts,
+        "confirmed_threats_count": confirmed_threats,
+        "provisional_threats_count": provisional_threats,
+        "has_anomaly": has_anomaly,
         "windows": rows,
     }
 
@@ -176,6 +261,7 @@ def health():
         "status": "ok",
         "model_loaded": MODEL is not None,
         "trained": TRAINED,
+        "unsw_model_loaded": MODEL_UNSW is not None and TRAINED_UNSW,
         "lockdown_active": SOC_STATE["lockdown_active"],
     }
 
@@ -200,8 +286,15 @@ def model_info():
 
 @app.get("/api/classes")
 def get_classes():
-    return [{"label": cls, "threat_level": THREAT_LEVELS.get(cls, ("UNKNOWN", "#6B7280"))[0],
-             "color": THREAT_LEVELS.get(cls, ("UNKNOWN", "#6B7280"))[1]} for cls in CLASSES]
+    result = [{"label": cls, "dataset": "CICIDS-2017",
+               "threat_level": THREAT_LEVELS.get(cls, ("UNKNOWN", "#6B7280"))[0],
+               "color": THREAT_LEVELS.get(cls, ("UNKNOWN", "#6B7280"))[1]} for cls in CLASSES]
+    if TRAINED_UNSW:
+        for cls in UNSW_CLASSES:
+            result.append({"label": cls, "dataset": "UNSW-NB15",
+                           "threat_level": THREAT_LEVELS_UNSW.get(cls, ("UNKNOWN", "#6B7280"))[0],
+                           "color": THREAT_LEVELS_UNSW.get(cls, ("UNKNOWN", "#6B7280"))[1]})
+    return result
 
 @app.get("/api/presets")
 def get_presets():
@@ -214,6 +307,11 @@ async def analyze_upload(file: UploadFile = File(...), max_windows: int = 50):
     try:
         contents = await file.read()
         df = pd.read_csv(io.BytesIO(contents))
+        # Auto-detect UNSW-NB15 format and use the dedicated UNSW model
+        if is_unsw_dataset(df) and MODEL_UNSW is not None and TRAINED_UNSW:
+            return run_inference(df, max_windows=max_windows,
+                                 model=MODEL_UNSW, meta=META_UNSW,
+                                 classes=UNSW_CLASSES, threat_map=THREAT_LEVELS_UNSW)
         return run_inference(df, max_windows=max_windows)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -232,6 +330,10 @@ def analyze_preset(req: PresetRequest):
         raise HTTPException(status_code=404, detail=f"Sample file not found: {fname}")
     try:
         df = pd.read_csv(fpath)
+        if is_unsw_dataset(df) and MODEL_UNSW is not None and TRAINED_UNSW:
+            return run_inference(df, max_windows=req.max_windows,
+                                 model=MODEL_UNSW, meta=META_UNSW,
+                                 classes=UNSW_CLASSES, threat_map=THREAT_LEVELS_UNSW)
         return run_inference(df, max_windows=req.max_windows)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -241,10 +343,39 @@ class SimulateRequest(BaseModel):
     n_flows: int = 70
     max_windows: int = 20
 
+@app.get("/api/simulate-types")
+def simulate_types():
+    """Returns all available simulation attack types for both datasets."""
+    cicids_types = [
+        "Normal Traffic", "DDoS Attack", "PortScan Probe",
+        "Mixed Attack Traffic", "Botnet C2 Beaconing",
+        "Heartbleed Exploit", "Web SQL Injection"
+    ]
+    unsw_types = [
+        "UNSW Normal", "UNSW Generic", "UNSW Exploits", "UNSW Fuzzers",
+        "UNSW DoS", "UNSW Reconnaissance", "UNSW Analysis",
+        "UNSW Backdoor", "UNSW Shellcode", "UNSW Worms"
+    ] if TRAINED_UNSW else []
+    return {
+        "cicids_2017": cicids_types,
+        "unsw_nb15":   unsw_types,
+        "all":         cicids_types + unsw_types
+    }
+
 @app.post("/api/simulate")
 def simulate(req: SimulateRequest):
     try:
         df = simulate_traffic_stream(attack_type=req.attack_type, n_flows=req.n_flows)
+        # UNSW attack types: route to UNSW model
+        if req.attack_type.startswith("UNSW") and MODEL_UNSW is not None and TRAINED_UNSW:
+            return run_inference(df, max_windows=req.max_windows,
+                                 model=MODEL_UNSW, meta=META_UNSW,
+                                 classes=UNSW_CLASSES, threat_map=THREAT_LEVELS_UNSW)
+        # CICIDS or auto-detect
+        if is_unsw_dataset(df) and MODEL_UNSW is not None and TRAINED_UNSW:
+            return run_inference(df, max_windows=req.max_windows,
+                                 model=MODEL_UNSW, meta=META_UNSW,
+                                 classes=UNSW_CLASSES, threat_map=THREAT_LEVELS_UNSW)
         return run_inference(df, max_windows=req.max_windows)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))

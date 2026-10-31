@@ -1,13 +1,24 @@
-import React, { useState, useEffect } from "react";
+import React, { Suspense, lazy, useState, useEffect } from "react";
 import { Sidebar, ResearchTab } from "./components/Sidebar";
 import { Header } from "./components/Header";
-import { DetectionPipelineView } from "./components/DetectionPipelineView";
-import { InterpretabilityView } from "./components/InterpretabilityView";
-import { PaperBenchmarksView } from "./components/PaperBenchmarksView";
-import { ArchitectureView } from "./components/ArchitectureView";
-import { SocCenterView } from "./components/SocCenterView";
 import { API } from "./api/client";
 import "./index.css";
+
+const DetectionPipelineView = lazy(() =>
+  import("./components/DetectionPipelineView").then((module) => ({ default: module.DetectionPipelineView })),
+);
+const InterpretabilityView = lazy(() =>
+  import("./components/InterpretabilityView").then((module) => ({ default: module.InterpretabilityView })),
+);
+const PaperBenchmarksView = lazy(() =>
+  import("./components/PaperBenchmarksView").then((module) => ({ default: module.PaperBenchmarksView })),
+);
+const ArchitectureView = lazy(() =>
+  import("./components/ArchitectureView").then((module) => ({ default: module.ArchitectureView })),
+);
+const SocCenterView = lazy(() =>
+  import("./components/SocCenterView").then((module) => ({ default: module.SocCenterView })),
+);
 
 export function App() {
   const [currentTab, setCurrentTab] = useState<ResearchTab>("pipeline");
@@ -34,11 +45,13 @@ export function App() {
         <Header />
 
         {/* 5 Focused Responsive Views */}
-        {currentTab === "pipeline" && <DetectionPipelineView />}
-        {currentTab === "interpretability" && <InterpretabilityView />}
-        {currentTab === "benchmarks" && <PaperBenchmarksView />}
-        {currentTab === "architecture" && <ArchitectureView />}
-        {currentTab === "soc" && <SocCenterView />}
+        <Suspense fallback={<div className="soc-content" role="status">Loading dashboard view...</div>}>
+          {currentTab === "pipeline" && <DetectionPipelineView />}
+          {currentTab === "interpretability" && <InterpretabilityView />}
+          {currentTab === "benchmarks" && <PaperBenchmarksView />}
+          {currentTab === "architecture" && <ArchitectureView />}
+          {currentTab === "soc" && <SocCenterView />}
+        </Suspense>
       </div>
     </div>
   );

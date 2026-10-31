@@ -150,16 +150,21 @@ export interface WindowResult {
   correct: boolean | null;
   top5: Array<{ label: string; prob: number }>;
   composite_b64: string;
+  confidence_status?: "CONFIRMED" | "EVALUATING" | "PROVISIONAL";
+  is_persistent?: boolean;
 }
 
 export interface AnalysisResult {
   n_flows: number;
   n_windows: number;
+  n_attack_windows?: number;
   elapsed_s: number;
   trained_model: boolean;
   highest_threat: string;
   threat_counts: Record<string, number>;
   class_counts: Record<string, number>;
+  confirmed_threats_count?: number;
+  provisional_threats_count?: number;
   windows: WindowResult[];
 }
 

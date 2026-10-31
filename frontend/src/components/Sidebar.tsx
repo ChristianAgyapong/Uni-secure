@@ -4,9 +4,12 @@ import {
   Eye,
   BarChart2,
   Cpu,
-  BookOpen,
+  ShieldCheck,
   CheckCircle2,
   ShieldAlert,
+  Radio,
+  Server,
+  Layers,
 } from "lucide-react";
 
 export type ResearchTab = "pipeline" | "interpretability" | "benchmarks" | "architecture" | "soc";
@@ -25,54 +28,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems = [
     {
       id: "pipeline" as ResearchTab,
-      label: "Detection Pipeline",
-      subtitle: "Algorithm 1 & Real Inference",
+      label: "Live Threat Monitor",
+      subtitle: "Real-Time Ingestion & Triage",
       icon: Activity,
+      badge: "LIVE",
+      badgeColor: "#10b981",
     },
     {
       id: "interpretability" as ResearchTab,
-      label: "Attention Heatmaps",
-      subtitle: "Figure 11 Interpretability",
+      label: "Visual AI Forensics",
+      subtitle: "Packet Attention Heatmaps",
       icon: Eye,
-    },
-    {
-      id: "benchmarks" as ResearchTab,
-      label: "Paper Benchmarks",
-      subtitle: "CICIDS-2017 & Comparisons",
-      icon: BarChart2,
-    },
-    {
-      id: "architecture" as ResearchTab,
-      label: "Model Architecture",
-      subtitle: "Figure 3 & Multi-Path ViT",
-      icon: Cpu,
+      badge: "AI",
+      badgeColor: "#38bdf8",
     },
     {
       id: "soc" as ResearchTab,
-      label: "SOC Operations & Logs",
-      subtitle: "Live Nodes, Threats & Logs",
+      label: "SOC Command Deck",
+      subtitle: "Campus Nodes, Isolation & Logs",
       icon: ShieldAlert,
+      badge: "OPS",
+      badgeColor: "#f59e0b",
+    },
+    {
+      id: "benchmarks" as ResearchTab,
+      label: "Security Telemetry",
+      subtitle: "Accuracy, Speed & Hardware Test",
+      icon: BarChart2,
+      badge: "98.3%",
+      badgeColor: "#818cf8",
+    },
+    {
+      id: "architecture" as ResearchTab,
+      label: "Neural Engine Blueprint",
+      subtitle: "Multi-Path Vision Pipeline",
+      icon: Cpu,
+      badge: null,
+      badgeColor: null,
     },
   ];
 
   return (
-    <aside className="soc-sidebar">
+    <aside className="soc-sidebar" style={{ display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
       <div>
-        {/* Research Paper Brand Header */}
-        <div className="sidebar-header" style={{ borderStyle: "solid" }}>
-          <div className="sidebar-header-icon" style={{ background: "rgba(56, 189, 248, 0.15)" }}>
-            <Activity size={20} color="#38bdf8" />
+        {/* Operations Brand Header */}
+        <div className="sidebar-header" style={{ padding: "18px 16px", borderBottom: "1px solid var(--border)" }}>
+          <div className="sidebar-header-icon" style={{
+            background: "linear-gradient(135deg, rgba(2,132,199,0.2), rgba(99,102,241,0.2))",
+            border: "1px solid rgba(56,189,248,0.3)",
+          }}>
+            <ShieldCheck size={20} color="var(--accent-cyan)" />
           </div>
           <div>
-            <div className="sidebar-title" style={{ fontSize: 15 }}>MEIC-ViT</div>
-            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
-              Computer Networks 2026
+            <div className="sidebar-title" style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>
+              UniSecure SOC
+            </div>
+            <div style={{ fontSize: 11, color: "var(--accent-cyan)", marginTop: 2, fontWeight: 600 }}>
+              AI Defense Operations
             </div>
           </div>
         </div>
 
-        {/* Clean Paper-Aligned Navigation */}
-        <nav className="sidebar-nav">
+        {/* Functional Operations Navigation */}
+        <nav className="sidebar-nav" style={{ padding: "12px 10px" }}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentTab === item.id;
@@ -80,51 +98,70 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 key={item.id}
                 className={`nav-item ${isActive ? "active" : ""}`}
-                style={{ padding: "12px 14px" }}
+                style={{
+                  padding: "11px 12px",
+                  borderRadius: 8,
+                  marginBottom: 4,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
                 onClick={() => onSelectTab(item.id)}
               >
-                <Icon size={18} />
-                <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
-                  <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500 }}>
-                    {item.label}
-                  </span>
-                  <span style={{ fontSize: 10, color: isActive ? "rgba(255,255,255,0.8)" : "var(--text-dim)", marginTop: 1 }}>
-                    {item.subtitle}
-                  </span>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Icon size={18} color={isActive ? "var(--accent-cyan)" : "var(--text-muted)"} />
+                  <div style={{ display: "flex", flexDirection: "column", textAlign: "left" }}>
+                    <span style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? "#fff" : "var(--text-main)" }}>
+                      {item.label}
+                    </span>
+                    <span style={{ fontSize: 10, color: isActive ? "rgba(255,255,255,0.7)" : "var(--text-dim)", marginTop: 1 }}>
+                      {item.subtitle}
+                    </span>
+                  </div>
                 </div>
+                {item.badge && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 4,
+                    background: `${item.badgeColor}18`, color: item.badgeColor, border: `1px solid ${item.badgeColor}33`,
+                    fontFamily: "var(--font-mono)",
+                  }}>
+                    {item.badge}
+                  </span>
+                )}
               </button>
             );
           })}
         </nav>
       </div>
 
-      {/* Model & Paper Status Footer */}
-      <div className="sidebar-footer" style={{ borderTop: "1px solid var(--border)" }}>
+      {/* Model Engine Status Footer */}
+      <div className="sidebar-footer" style={{ padding: 14, borderTop: "1px solid var(--border)" }}>
         <div
           style={{
             background: "rgba(16, 185, 129, 0.08)",
             border: "1px solid rgba(16, 185, 129, 0.25)",
-            borderRadius: 6,
+            borderRadius: 8,
             padding: "10px 12px",
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 10,
           }}
         >
-          <CheckCircle2 size={16} color="#10b981" />
+          <CheckCircle2 size={18} color="#10b981" />
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#10b981" }}>
-              {isModelReady ? "5.03M Model Loaded" : "Model Initializing"}
+              {isModelReady ? "Vision AI Engine Active" : "Engine Initializing…"}
             </div>
-            <div style={{ fontSize: 10, color: "var(--text-dim)" }}>
-              PyTorch Checkpoint Active
+            <div style={{ fontSize: 10, color: "var(--text-dim)", marginTop: 1 }}>
+              5.03M Parameters Loaded
             </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "var(--text-dim)", marginTop: 4 }}>
-          <BookOpen size={13} />
-          <span>Xiao et al. · Xi'an Univ of Tech</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 10, color: "var(--text-dim)", marginTop: 8, paddingInline: 2 }}>
+          <span>Defense Mode: Zero-Day Guard</span>
+          <span style={{ color: "#10b981", fontWeight: 700 }}>● RUNNING</span>
         </div>
       </div>
     </aside>

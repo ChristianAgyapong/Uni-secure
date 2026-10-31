@@ -107,6 +107,7 @@ def generate_class_flow_data(cls_name, n_samples):
     
     # Specific attack footprints:
     if cls_name == "DDoS":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
         d["Flow_Packets_s"] = np.random.uniform(5000, 50000, size=n_samples)
         d["Flow_Bytes_s"] = np.random.uniform(200000, 2000000, size=n_samples)
@@ -118,17 +119,25 @@ def generate_class_flow_data(cls_name, n_samples):
         d["Fwd_Header_Length"] = np.random.randint(32, 60, size=n_samples)
 
     elif cls_name == "PortScan":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.randint(1, 65535, size=n_samples)
         d["Total_Length_of_Fwd_Packets"] = np.random.choice([0, 40, 44, 60], size=n_samples)
         d["Total_Length_of_Bwd_Packets"] = np.zeros(n_samples)
         d["Packet_Length_Variance"] = np.random.uniform(0, 5, size=n_samples)
-        d["Flow_Duration"] = np.random.uniform(1, 100, size=n_samples)
-        d["Flow_Packets_s"] = np.random.uniform(100, 2000, size=n_samples)
+        d["Flow_Duration"] = np.random.uniform(1, 150, size=n_samples)
+        d["Flow_Packets_s"] = np.random.uniform(800, 8000, size=n_samples)
+        d["Bwd_Packets_s"] = np.zeros(n_samples)
+        d["act_data_pkt_fwd"] = np.zeros(n_samples, dtype=int)
+        d["Fwd_Packet_Length_Max"] = np.random.choice([0, 40, 44, 60], size=n_samples)
+        d["Fwd_Packet_Length_Mean"] = np.random.choice([0, 40, 44, 60], size=n_samples)
+        d["Fwd_Packet_Length_Min"] = np.zeros(n_samples, dtype=int)
+        d["Bwd_Packet_Length_Min"] = np.zeros(n_samples, dtype=int)
         d["PSH_Flag_Count"] = np.zeros(n_samples, dtype=int)
         d["ACK_Flag_Count"] = np.random.choice([0, 1], size=n_samples, p=[0.85, 0.15])
         d["Init_Win_bytes_forward"] = np.random.choice([1024, 2048, 4096], size=n_samples)
 
     elif cls_name == "DoS Hulk":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 8080], size=n_samples)
         d["Flow_Packets_s"] = np.random.uniform(1000, 15000, size=n_samples)
         d["Fwd_Packet_Length_Max"] = np.random.uniform(800, 1460, size=n_samples)
@@ -136,12 +145,14 @@ def generate_class_flow_data(cls_name, n_samples):
         d["PSH_Flag_Count"] = np.ones(n_samples, dtype=int)
 
     elif cls_name == "DoS GoldenEye":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
         d["Active_Mean"] = np.random.uniform(5000, 30000, size=n_samples)
         d["Active_Max"] = d["Active_Mean"] * 1.5
         d["Flow_Duration"] = np.random.uniform(20000, 120000, size=n_samples)
 
     elif cls_name == "DoS slowloris":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
         d["Flow_Duration"] = np.random.uniform(600000, 3600000, size=n_samples) # very long duration
         d["Flow_Bytes_s"] = np.random.uniform(0.1, 20, size=n_samples) # trickle
@@ -150,17 +161,24 @@ def generate_class_flow_data(cls_name, n_samples):
         d["Max_Packet_Length"] = np.random.uniform(20, 60, size=n_samples)
 
     elif cls_name == "DoS Slowhttptest":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 8080], size=n_samples)
         d["Flow_Duration"] = np.random.uniform(300000, 1800000, size=n_samples)
         d["Flow_Packets_s"] = np.random.uniform(0.5, 10, size=n_samples)
         d["Init_Win_bytes_forward"] = np.random.choice([256, 512, 1024], size=n_samples)
 
     elif cls_name == "Bot":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([8080, 6667, 4444], size=n_samples)
-        d["Fwd_IAT_Mean"] = np.random.normal(loc=5000, scale=100, size=n_samples) # periodic C2 beacon
-        d["Fwd_IAT_Max"] = d["Fwd_IAT_Mean"] + 200
-        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(100, 500, size=n_samples)
-        d["Packet_Length_Variance"] = np.random.uniform(50, 400, size=n_samples)
+        d["Flow_Duration"] = np.random.uniform(2000, 25000, size=n_samples)
+        d["Flow_Packets_s"] = np.random.uniform(2, 20, size=n_samples)
+        d["Fwd_IAT_Mean"] = np.random.normal(loc=5000, scale=40, size=n_samples) # strictly periodic C2 beacon
+        d["Fwd_IAT_Max"] = d["Fwd_IAT_Mean"] + 60
+        d["Fwd_IAT_Min"] = d["Fwd_IAT_Mean"] - 60
+        d["Bwd_IAT_Mean"] = np.random.normal(loc=5000, scale=40, size=n_samples)
+        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(100, 400, size=n_samples)
+        d["Total_Length_of_Bwd_Packets"] = np.random.uniform(100, 400, size=n_samples)
+        d["Packet_Length_Variance"] = np.random.uniform(50, 300, size=n_samples)
 
     elif cls_name == "FTP-Patator":
         d["Destination_Port"] = np.full(n_samples, 21)
@@ -177,33 +195,61 @@ def generate_class_flow_data(cls_name, n_samples):
         d["Total_Length_of_Bwd_Packets"] = np.random.uniform(400, 1200, size=n_samples)
 
     elif cls_name == "Heartbleed":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.full(n_samples, 443)
         d["Total_Length_of_Bwd_Packets"] = np.random.uniform(32768, 65535, size=n_samples) # leaked buffer
         d["Max_Packet_Length"] = np.random.uniform(1460, 1500, size=n_samples)
+        d["Fwd_Packet_Length_Min"] = np.full(n_samples, 5) # 5-byte heartbeat request
+        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(50, 120, size=n_samples)
+        d["Down_Up_Ratio"] = np.random.choice([15, 25, 35, 50], size=n_samples)
         d["Flow_Bytes_s"] = np.random.uniform(500000, 3000000, size=n_samples)
+        d["PSH_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["ACK_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["act_data_pkt_fwd"] = np.ones(n_samples, dtype=int)
 
     elif cls_name == "Infiltration":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.randint(10000, 50000, size=n_samples)
         d["act_data_pkt_fwd"] = np.random.randint(10, 80, size=n_samples)
         d["Total_Length_of_Fwd_Packets"] = np.random.uniform(3000, 15000, size=n_samples)
         d["Flow_Duration"] = np.random.uniform(10000, 80000, size=n_samples)
 
     elif cls_name == "Web Attack Brute Force":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
         d["act_data_pkt_fwd"] = np.random.randint(2, 6, size=n_samples)
         d["Fwd_Packet_Length_Mean"] = np.random.uniform(250, 450, size=n_samples)
         d["Total_Length_of_Fwd_Packets"] = np.random.uniform(500, 2500, size=n_samples)
+        d["PSH_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["ACK_Flag_Count"] = np.ones(n_samples, dtype=int)
 
     elif cls_name == "Web Attack Sql Injection":
-        d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
-        d["Fwd_Packet_Length_Max"] = np.random.uniform(400, 950, size=n_samples)
-        d["Fwd_Packet_Length_Mean"] = np.random.uniform(350, 600, size=n_samples)
-        d["Packet_Length_Variance"] = np.random.uniform(1000, 8000, size=n_samples)
+        d["Protocol"] = np.full(n_samples, 6)
+        d["Destination_Port"] = np.random.choice([80, 443, 8080], size=n_samples, p=[0.45, 0.45, 0.10])
+        d["act_data_pkt_fwd"] = np.random.randint(1, 4, size=n_samples)
+        d["Fwd_Packet_Length_Max"] = np.random.uniform(550, 1400, size=n_samples)
+        d["Fwd_Packet_Length_Mean"] = np.random.uniform(420, 850, size=n_samples)
+        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(600, 3200, size=n_samples)
+        # Bimodal: short syntax error or database table dump exfiltration
+        dump_mask = np.random.rand(n_samples) > 0.45
+        bwd_lens = np.random.uniform(200, 800, size=n_samples)
+        bwd_lens[dump_mask] = np.random.uniform(15000, 65535, size=dump_mask.sum())
+        d["Total_Length_of_Bwd_Packets"] = bwd_lens
+        d["Packet_Length_Variance"] = np.random.uniform(6000, 50000, size=n_samples)
+        d["PSH_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["ACK_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["min_seg_size_forward"] = np.full(n_samples, 32)
+        d["Down_Up_Ratio"] = np.random.choice([1, 2, 3, 4], size=n_samples)
+        d["Flow_Duration"] = np.random.uniform(8000, 120000, size=n_samples)
 
     elif cls_name == "Web Attack XSS":
+        d["Protocol"] = np.full(n_samples, 6)
         d["Destination_Port"] = np.random.choice([80, 443], size=n_samples)
-        d["Fwd_Packet_Length_Mean"] = np.random.uniform(280, 520, size=n_samples)
-        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(600, 2200, size=n_samples)
+        d["act_data_pkt_fwd"] = np.random.randint(1, 4, size=n_samples)
+        d["Fwd_Packet_Length_Mean"] = np.random.uniform(320, 650, size=n_samples)
+        d["Total_Length_of_Fwd_Packets"] = np.random.uniform(700, 2600, size=n_samples)
+        d["PSH_Flag_Count"] = np.ones(n_samples, dtype=int)
+        d["ACK_Flag_Count"] = np.ones(n_samples, dtype=int)
 
     df = pd.DataFrame(d)
     # Ensure all selected features exist and are ordered
@@ -255,9 +301,17 @@ def convert_flows_to_rgb_windows(df, raw_min, raw_max, window=35, stride=18):
     Implements Algorithm 1 from Paper:
     Flow data to RGB image conversion with sliding window and multi-label assignment.
     """
-    x = df[SELECTED_FEATURES].values.astype(np.float64)
-    rng = np.where(raw_max - raw_min == 0, 1.0, raw_max - raw_min)
+    # Clean numeric features: ensure no inf or nan
+    x_df = df[SELECTED_FEATURES].copy()
+    for col in x_df.columns:
+        if x_df[col].dtype == object:
+            x_df[col] = pd.to_numeric(x_df[col], errors="coerce")
+    x = x_df.replace([np.inf, -np.inf], np.nan).fillna(0.0).values.astype(np.float64)
+    
+    rng = np.where(raw_max - raw_min <= 0, 1.0, raw_max - raw_min)
+    rng = np.where(np.isnan(rng) | np.isinf(rng), 1.0, rng)
     x_norm = np.clip((x - raw_min) / rng, 0.0, 1.0)
+    x_norm = np.nan_to_num(x_norm, nan=0.0, posinf=1.0, neginf=0.0)
     
     # Map to 24-bit RGB space [0, 16777215]
     iv = np.clip(x_norm * 16777215.0, 0, 16777215).astype(np.uint32)
@@ -302,21 +356,30 @@ def train_and_export():
     
     class_sizes_train = {
         "BENIGN": 1200, "DoS Hulk": 800, "PortScan": 700, "DDoS": 700,
-        "DoS GoldenEye": 400, "FTP-Patator": 350, "SSH-Patator": 350,
-        "DoS slowloris": 300, "DoS Slowhttptest": 300, "Bot": 250,
-        "Heartbleed": 100, "Infiltration": 100, "Web Attack Brute Force": 200,
-        "Web Attack Sql Injection": 100, "Web Attack XSS": 150
+        "DoS GoldenEye": 500, "FTP-Patator": 450, "SSH-Patator": 450,
+        "DoS slowloris": 450, "DoS Slowhttptest": 450, "Bot": 450,
+        "Heartbleed": 450, "Infiltration": 450, "Web Attack Brute Force": 450,
+        "Web Attack Sql Injection": 500, "Web Attack XSS": 450
     }
     
-    class_sizes_test = {k: max(70, v // 3) for k, v in class_sizes_train.items()}
+    class_sizes_test = {k: max(90, v // 3) for k, v in class_sizes_train.items()}
     
-    print("\n[Step 1] Synthesizing empirical flow distributions...")
+    print("\n[Step 1] Synthesizing empirical flow distributions & mixed boundary flows...")
     for cls in CLASSES:
         df_tr = generate_class_flow_data(cls, class_sizes_train[cls])
         # Apply FPSS (Section 3.1.3) to minority attacks
-        if class_sizes_train[cls] < 300:
-            df_tr = apply_fpss(df_tr, alpha=0.25, target_count=300)
+        if class_sizes_train[cls] < 500:
+            df_tr = apply_fpss(df_tr, alpha=0.25, target_count=500)
         train_dfs.append(df_tr)
+
+        # Mixed onset transition sequence: 20 Benign flows + 60 Attack flows
+        # Crucial for teaching MEIC-ViT never to overlook attacks even when Benign flows are present
+        if cls != "BENIGN":
+            df_mixed = pd.concat([
+                generate_class_flow_data("BENIGN", 20),
+                generate_class_flow_data(cls, 60)
+            ], ignore_index=True)
+            train_dfs.append(df_mixed)
         
         df_te = generate_class_flow_data(cls, class_sizes_test[cls])
         test_dfs.append(df_te)
@@ -386,9 +449,12 @@ def train_and_export():
     print(f"Total Parameters: {total_params / 1e6:.2f}M (Table 12: ~3.44M)")
     
     # 6. Loss Function: Stratified Focal Loss (Section 3.4.3 & Table 2)
-    # Dynamic alpha weights balancing class frequencies
+    # Dynamic alpha weights balancing class frequencies with sensitive penalty for stealth attacks
     class_counts = np.bincount(y_train, minlength=len(CLASSES))
     weights = 1.0 / np.sqrt(np.maximum(class_counts, 1.0))
+    for c_name in ["Web Attack Sql Injection", "Heartbleed", "PortScan", "Bot", "Infiltration"]:
+        if c_name in class_to_idx:
+            weights[class_to_idx[c_name]] *= 1.8
     weights = weights / weights.sum() * len(CLASSES)
     alpha_tensor = torch.tensor(weights, dtype=torch.float32).to(device)
     
@@ -401,7 +467,7 @@ def train_and_export():
     best_f1 = 0.0
     best_weights_path = os.path.join(ARTIFACTS_DIR, "meic_vit_best.pt")
     
-    epochs = 8
+    epochs = 10
     for epoch in range(1, epochs + 1):
         model.train()
         train_loss = 0.0
