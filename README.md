@@ -5,7 +5,8 @@
 > Xiao et al., *Computer Networks* 282 (2026) 112273 — [doi:10.1016/j.comnet.2026.112273](https://doi.org/10.1016/j.comnet.2026.112273)
 
 👉 **Looking for a non-technical, plain-English overview?** Read the [Plain-English Guide & Interface Manual](file:///c:/Users/DELL/OneDrive/Desktop/USED%20FILE/demo-cyber/PLAIN_LANGUAGE_GUIDE.md).  
-🎤 **Preparing to present or demo this project?** Read the [Master Presentation & Showcase Guide](file:///c:/Users/DELL/OneDrive/Desktop/USED%20FILE/demo-cyber/PRESENTATION_GUIDE.md).
+🎤 **Preparing to present or demo this project?** Read the [Master Presentation & Showcase Guide](file:///c:/Users/DELL/OneDrive/Desktop/USED%20FILE/demo-cyber/PRESENTATION_GUIDE.md).  
+📡 **Looking for the Live Packet Capture & Npcap Guide?** Read the [Live Network Capture Pipeline README](file:///c:/Users/DELL/OneDrive/Desktop/USED%20FILE/demo-cyber/LIVE_CAPTURE_README.md).
 
 ---
 

@@ -412,15 +412,16 @@ def to_windows(df, meta, max_windows: int = 50):
     
     truth = None
     if "Label" in df_clean.columns:
-        labs = df_clean["Label"].astype(str).values
         clean_name = "Normal" if _is_unsw else "BENIGN"
+        filled_labs = df_clean["Label"].fillna(clean_name)
+        labs = [str(x).strip() for x in filled_labs]
         truth = []
         for i in starts:
             win_labs = labs[i : i + W]
             unique_l, counts = np.unique(win_labs, return_counts=True)
             non_benign_counts = {
                 l: c for l, c in zip(unique_l, counts)
-                if not (str(l).upper().startswith("BENIGN") or str(l).upper().startswith("NORMAL"))
+                if not (str(l).upper().startswith("BENIGN") or str(l).upper().startswith("NORMAL") or str(l).upper() in ("NAN", "NONE"))
             }
             total_attack_flows = sum(non_benign_counts.values())
             

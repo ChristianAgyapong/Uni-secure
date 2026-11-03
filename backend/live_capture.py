@@ -442,10 +442,35 @@ class LiveCaptureEngine:
         Updates counters, completes flows, and triggers immediate model inference.
         """
         with self._lock:
-            for f in flow_records:
+            for raw_f in flow_records:
+                f = dict(raw_f)
+                # Ensure display and volume metadata exist for injected flows
+                dport = int(f.get("Destination_Port", f.get("_dst_port", 80)))
+                sport = int(f.get("Source_Port", f.get("_src_port", np.random.randint(49152, 65535))))
+                proto = int(f.get("Protocol", f.get("_proto", 6)))
+                pkts = int(f.get("_packets", np.random.randint(15, 60)))
+                fwd_b = float(f.get("Total_Length_of_Fwd_Packets", 0))
+                bwd_b = float(f.get("Total_Length_of_Bwd_Packets", 0))
+                bytes_cnt = int(f.get("_bytes", max(int(fwd_b + bwd_b), 120)))
+
+                if "_src_ip" not in f:
+                    f["_src_ip"] = "192.168.1.105"
+                if "_dst_ip" not in f:
+                    f["_dst_ip"] = "10.0.0.1" if dport in (80, 443, 8000, 21, 22) else "192.168.1.1"
+                if "_src_port" not in f:
+                    f["_src_port"] = sport
+                if "_dst_port" not in f:
+                    f["_dst_port"] = dport
+                if "_proto" not in f:
+                    f["_proto"] = proto
+                if "_packets" not in f:
+                    f["_packets"] = pkts
+                if "_bytes" not in f:
+                    f["_bytes"] = bytes_cnt
+
                 self.completed_flows.append(f)
                 self.flow_buffer.append(f)
-                self.packets_captured += int(f.get("_packets", np.random.randint(5, 50)))
+                self.packets_captured += f["_packets"]
                 self.flows_completed += 1
 
             batch_to_predict = None

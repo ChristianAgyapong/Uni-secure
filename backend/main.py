@@ -1040,22 +1040,44 @@ class LiveInferenceAdapter:
             for f in flow_records
         ]
         df = pd.DataFrame(clean_records)
+
+        # Route dynamically between CICIDS-2017 and UNSW-NB15 models based on schema
+        use_model = MODEL
+        use_meta = META
+        use_classes = CLASSES
+        use_threats = THREAT_LEVELS
+        if is_unsw_dataset(df) and MODEL_UNSW is not None and TRAINED_UNSW:
+            use_model = MODEL_UNSW
+            use_meta = META_UNSW
+            use_classes = UNSW_CLASSES
+            use_threats = THREAT_LEVELS_UNSW
+
         res = run_inference(
             df,
             max_windows=5,
-            model=MODEL,
-            meta=META,
-            classes=CLASSES,
-            threat_map=THREAT_LEVELS
+            model=use_model,
+            meta=use_meta,
+            classes=use_classes,
+            threat_map=use_threats
         )
 
-        # Inspect flow telemetry for port and volume context
+        # Inspect flow telemetry for port and volume context (robust to NaNs / types)
         dst_ports = set()
         total_packets = 0
         for f in flow_records:
-            dport = int(f.get("Destination_Port", f.get("_dst_port", 0)))
+            raw_dport = f.get("Destination_Port", f.get("_dst_port", 0))
+            try:
+                dport = int(float(raw_dport)) if not pd.isna(raw_dport) else 0
+            except Exception:
+                dport = 0
             dst_ports.add(dport)
-            total_packets += int(f.get("_packets", 1))
+
+            raw_pkts = f.get("_packets", 1)
+            try:
+                pkts = int(float(raw_pkts)) if not pd.isna(raw_pkts) else 1
+            except Exception:
+                pkts = 1
+            total_packets += pkts
 
         # Apply false positive filtering to each window
         filtered_windows = []
