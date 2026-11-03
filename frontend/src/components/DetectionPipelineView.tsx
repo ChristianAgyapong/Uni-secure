@@ -234,7 +234,7 @@ export const DetectionPipelineView: React.FC = () => {
 
   const scanRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  /* Fetch live network interfaces on mount */
+  /* Fetch live network interfaces and synchronize status on mount */
   useEffect(() => {
     API.getLiveInterfaces()
       .then((res) => {
@@ -261,6 +261,26 @@ export const DetectionPipelineView: React.FC = () => {
         }
       })
       .catch(() => {});
+
+    // Synchronize current live capture status from backend
+    API.getLiveStatus()
+      .then((st) => {
+        setLiveStatus(st.status);
+        setLiveStats({
+          packets: st.packets_captured,
+          flows: st.flows_completed,
+          windows: st.windows_processed,
+          error: st.error,
+        });
+        if (st.recent_flows && st.recent_flows.length > 0) {
+          setRecentFlows(st.recent_flows);
+        }
+        // If capture was already running in background, keep user on live tab
+        if (st.status === "RUNNING" || st.status === "RUNNING_SIMULATED") {
+          setInputMode("live");
+        }
+      })
+      .catch(() => {});
   }, []);
 
   /* Poll live status & events when active */
@@ -280,33 +300,16 @@ export const DetectionPipelineView: React.FC = () => {
           if (st.recent_flows && st.recent_flows.length > 0) {
             setRecentFlows(st.recent_flows);
           }
-          const ev = await API.getLiveEvents(5);
-          if (ev.events && ev.events.length > 0) {
-            const validWindows = ev.events
-              .map((e) => e.window_detail)
-              .filter(Boolean) as WindowResult[];
-            if (validWindows.length > 0) {
-              setSelectedWindow(validWindows[validWindows.length - 1]);
-              setResult({
-                n_flows: st.flows_completed,
-                n_windows: validWindows.length,
-                n_attack_windows: validWindows.filter((w) => !isBenignPrediction(w.prediction)).length,
-                elapsed_s: 0.1,
-                trained_model: true,
-                highest_threat:
-                  validWindows.find((w) => w.threat_level === "CRITICAL")
-                    ? "CRITICAL"
-                    : validWindows.find((w) => w.threat_level === "HIGH")
-                    ? "HIGH"
-                    : "LOW",
-                threat_counts: {},
-                class_counts: {},
-                windows: validWindows,
-              });
-            }
+          if (st.current_result && st.current_result.windows && st.current_result.windows.length > 0) {
+            setResult(st.current_result);
+            setSelectedWindow((prev) => {
+              if (!prev) return st.current_result!.windows[st.current_result!.windows.length - 1];
+              const match = st.current_result!.windows.find((w) => w.window === prev.window);
+              return match || st.current_result!.windows[st.current_result!.windows.length - 1];
+            });
           }
         } catch (e) {}
-      }, 1200);
+      }, 1000);
     }
     return () => {
       if (timer) clearInterval(timer);
@@ -496,9 +499,22 @@ export const DetectionPipelineView: React.FC = () => {
                   onClick={() => {
                     setInputMode(mode);
                     if (mode === "live") {
-                      // Reset static preset results so the live capture dashboard is active
-                      setResult(null);
-                      setSelectedWindow(null);
+                      // Fetch current status and sync active state
+                      API.getLiveStatus()
+                        .then((st) => {
+                          setLiveStatus(st.status);
+                          setLiveStats({
+                            packets: st.packets_captured,
+                            flows: st.flows_completed,
+                            windows: st.windows_processed,
+                            error: st.error,
+                          });
+                          if (st.recent_flows) setRecentFlows(st.recent_flows);
+                          if (st.current_result && st.current_result.windows && st.current_result.windows.length > 0) {
+                            setResult(st.current_result);
+                          }
+                        })
+                        .catch(() => {});
                     }
                   }}
                   style={{ padding: "7px 14px", fontSize: 12 }}
@@ -821,10 +837,33 @@ export const DetectionPipelineView: React.FC = () => {
             <button
               key={item.label}
               disabled={loading}
-              onClick={() => {
-                setInputMode("stream");
-                setStreamAttack(item.attack);
-                runStream(item.attack);
+              onClick={async () => {
+                if (inputMode === "live") {
+                  setLoading(true);
+                  try {
+                    const res = await API.injectLiveAttack(item.attack, 35);
+                    if (res.result && res.result.windows && res.result.windows.length > 0) {
+                      setResult(res.result);
+                      setSelectedWindow(res.result.windows[res.result.windows.length - 1]);
+                    }
+                    const st = await API.getLiveStatus();
+                    setLiveStats({
+                      packets: st.packets_captured,
+                      flows: st.flows_completed,
+                      windows: st.windows_processed,
+                      error: st.error,
+                    });
+                    if (st.recent_flows) setRecentFlows(st.recent_flows);
+                  } catch (e: any) {
+                    setError(e.message ?? "Attack injection failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                } else {
+                  setInputMode("stream");
+                  setStreamAttack(item.attack);
+                  runStream(item.attack);
+                }
               }}
               style={{
                 fontSize: 11, fontWeight: 600,

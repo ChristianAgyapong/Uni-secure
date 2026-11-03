@@ -329,6 +329,7 @@ export const API = {
         bytes: number;
         duration_ms: number;
       }>;
+      current_result?: AnalysisResult;
       error: string | null;
     }>("/api/live/status"),
 
@@ -347,5 +348,11 @@ export const API = {
         window_detail?: WindowResult;
       }>;
     }>(`/api/live/events?limit=${limit}`),
+
+  injectLiveAttack: (attack_type: string, n_flows = 35) =>
+    api<{ status: string; windows_evaluated?: number; result?: AnalysisResult }>("/api/live/inject", {
+      method: "POST",
+      body: JSON.stringify({ attack_type, n_flows }),
+    }),
 };
 
