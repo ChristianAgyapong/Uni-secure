@@ -23,6 +23,9 @@ import {
   Download,
   ShieldCheck,
   Lock,
+  Wifi,
+  Square,
+  Radio,
 } from "lucide-react";
 import { API, AnalysisResult, WindowResult } from "../api/client";
 
@@ -208,11 +211,18 @@ const WindowRow: React.FC<{ w: WindowResult; isSelected: boolean; onClick: () =>
 
 /* ─── Main component ───────────────────────────────────────────────────────── */
 export const DetectionPipelineView: React.FC = () => {
-  const [inputMode, setInputMode] = useState<"preset" | "stream" | "upload">("preset");
+  const [inputMode, setInputMode] = useState<"preset" | "stream" | "upload" | "live">("preset");
   const [selectedPreset, setSelectedPreset] = useState("DDoS Attack Sample");
   const [streamAttack, setStreamAttack] = useState("DDoS Attack");
   const [streamFlows, setStreamFlows] = useState(70);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+
+  // Live capture state
+  const [liveInterfaces, setLiveInterfaces] = useState<Array<{ id: string; name: string; description: string; ips: string[]; is_wifi?: boolean; is_ethernet?: boolean }>>([]);
+  const [selectedInterface, setSelectedInterface] = useState("Wi-Fi");
+  const [liveStatus, setLiveStatus] = useState<"STOPPED" | "RUNNING" | "RUNNING_SIMULATED" | "ERROR">("STOPPED");
+  const [liveStats, setLiveStats] = useState({ packets: 0, flows: 0, windows: 0, error: "" as string | null });
+  const [recentFlows, setRecentFlows] = useState<Array<{ src: string; dst: string; proto: string; packets: number; bytes: number; duration_ms: number }>>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,6 +233,85 @@ export const DetectionPipelineView: React.FC = () => {
   const [quarantined, setQuarantined] = useState(false);
 
   const scanRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  /* Fetch live network interfaces on mount */
+  useEffect(() => {
+    API.getLiveInterfaces()
+      .then((res) => {
+        if (res.interfaces && res.interfaces.length > 0) {
+          setLiveInterfaces(res.interfaces);
+          // Prefer active adapter with a real valid IP (not link-local 169.254.x.x)
+          const activeWithIp = res.interfaces.find(
+            (i) =>
+              i.ips &&
+              i.ips.some(
+                (ip) =>
+                  !ip.startsWith("169.254") &&
+                  !ip.startsWith("fe80") &&
+                  ip !== "::1" &&
+                  ip !== "127.0.0.1"
+              )
+          );
+          const preferred =
+            activeWithIp ||
+            res.interfaces.find((i) => i.is_wifi) ||
+            res.interfaces.find((i) => i.is_ethernet) ||
+            res.interfaces[0];
+          setSelectedInterface(preferred.name);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  /* Poll live status & events when active */
+  useEffect(() => {
+    let timer: any = null;
+    if (liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") {
+      timer = setInterval(async () => {
+        try {
+          const st = await API.getLiveStatus();
+          setLiveStatus(st.status);
+          setLiveStats({
+            packets: st.packets_captured,
+            flows: st.flows_completed,
+            windows: st.windows_processed,
+            error: st.error,
+          });
+          if (st.recent_flows && st.recent_flows.length > 0) {
+            setRecentFlows(st.recent_flows);
+          }
+          const ev = await API.getLiveEvents(5);
+          if (ev.events && ev.events.length > 0) {
+            const validWindows = ev.events
+              .map((e) => e.window_detail)
+              .filter(Boolean) as WindowResult[];
+            if (validWindows.length > 0) {
+              setSelectedWindow(validWindows[validWindows.length - 1]);
+              setResult({
+                n_flows: st.flows_completed,
+                n_windows: validWindows.length,
+                n_attack_windows: validWindows.filter((w) => !isBenignPrediction(w.prediction)).length,
+                elapsed_s: 0.1,
+                trained_model: true,
+                highest_threat:
+                  validWindows.find((w) => w.threat_level === "CRITICAL")
+                    ? "CRITICAL"
+                    : validWindows.find((w) => w.threat_level === "HIGH")
+                    ? "HIGH"
+                    : "LOW",
+                threat_counts: {},
+                class_counts: {},
+                windows: validWindows,
+              });
+            }
+          }
+        } catch (e) {}
+      }, 1200);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [liveStatus]);
 
   /* Animated scan-line while loading */
   useEffect(() => {
@@ -271,6 +360,42 @@ export const DetectionPipelineView: React.FC = () => {
       setSelectedWindow(res.windows[0] ?? null);
     } catch (e: any) { setError(e.message ?? "Upload error"); }
     finally { setLoading(false); }
+  };
+
+  const toggleLiveCapture = async () => {
+    if (liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") {
+      setLoading(true);
+      try {
+        const res = await API.stopLiveCapture();
+        setLiveStatus("STOPPED");
+        if (res.result && res.result.windows && res.result.windows.length > 0) {
+          setResult(res.result);
+          setSelectedWindow(res.result.windows[0]);
+        }
+      } catch (e: any) {
+        setError(e.message ?? "Failed to stop capture");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setLoading(true);
+      setError(null);
+      setResult(null);
+      setSelectedWindow(null);
+      setRecentFlows([]);
+      try {
+        const res = await API.startLiveCapture(selectedInterface);
+        const nextStatus =
+          res.status === "STARTED" || res.status === "RUNNING" ? "RUNNING" : (res.status as any);
+        setLiveStatus(nextStatus);
+        const st = await API.getLiveStatus();
+        setLiveStatus(st.status);
+      } catch (e: any) {
+        setError(`Live capture failed: ${e.message ?? "Could not reach backend"}. Is uvicorn running on port 8000?`);
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   const exportIncidentReport = () => {
@@ -351,24 +476,52 @@ export const DetectionPipelineView: React.FC = () => {
       <div className="panel" style={{ padding: "16px 18px" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 6 }}>
-            {(["preset", "stream", "upload"] as const).map((mode) => {
-              const labels = { preset: "Preset Captures", stream: "Live Stream Inject", upload: "Upload CSV" };
-              const icons = { preset: <Layers size={13} />, stream: <Activity size={13} />, upload: <Upload size={13} /> };
+            {(["preset", "stream", "upload", "live"] as const).map((mode) => {
+              const labels = {
+                preset: "Preset Captures",
+                stream: "Live Stream Inject",
+                upload: "Upload CSV",
+                live: "Live Network TAP (Npcap)",
+              };
+              const icons = {
+                preset: <Layers size={13} />,
+                stream: <Activity size={13} />,
+                upload: <Upload size={13} />,
+                live: <Wifi size={13} />,
+              };
               return (
                 <button
                   key={mode}
                   className={`btn-secondary-soc ${inputMode === mode ? "btn-primary-soc" : ""}`}
-                  onClick={() => setInputMode(mode)}
+                  onClick={() => {
+                    setInputMode(mode);
+                    if (mode === "live") {
+                      // Reset static preset results so the live capture dashboard is active
+                      setResult(null);
+                      setSelectedWindow(null);
+                    }
+                  }}
                   style={{ padding: "7px 14px", fontSize: 12 }}
                 >
                   {icons[mode]}
                   <span>{labels[mode]}</span>
+                  {mode === "live" && (liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") && (
+                    <span style={{ marginLeft: 6, display: "inline-flex" }}>
+                      <PulseDot color="#10b981" />
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
           <div style={{ fontSize: 10, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-            35-FLOW IMAGE SLICING · REAL-TIME INFERENCE
+            {inputMode === "live"
+              ? liveStatus === "RUNNING"
+                ? "NPCAP WIRE CAPTURE ACTIVE"
+                : liveStatus === "RUNNING_SIMULATED"
+                ? "LOCAL WIRE STREAMING (SIMULATED)"
+                : "TAP READY"
+              : "VISION TRANSFORMER IDS PIPELINE"}
           </div>
         </div>
 
@@ -484,6 +637,173 @@ export const DetectionPipelineView: React.FC = () => {
           </form>
         )}
 
+        {/* Mode: Live Network TAP (Npcap) */}
+        {inputMode === "live" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ display: "flex", gap: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 260 }}>
+                <label style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  Host Network Interface (Windows Npcap)
+                </label>
+                <select
+                  className="logs-filter-select"
+                  style={{ width: "100%", marginTop: 5 }}
+                  value={selectedInterface}
+                  onChange={(e) => setSelectedInterface(e.target.value)}
+                  disabled={liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"}
+                >
+                  {liveInterfaces.length > 0 ? (
+                    liveInterfaces.map((iface) => (
+                      <option key={iface.name} value={iface.name}>
+                        {iface.name} — {iface.description} {iface.ips && iface.ips.length > 0 ? `(${iface.ips[0]})` : ""}
+                      </option>
+                    ))
+                  ) : (
+                    <>
+                      <option value="Wi-Fi">Wi-Fi (Active Adapter)</option>
+                      <option value="Ethernet">Ethernet</option>
+                      <option value="Loopback Pseudo-Interface 1">Loopback (Localhost)</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              <button
+                className="btn-primary-soc"
+                style={{
+                  height: 36,
+                  paddingInline: 22,
+                  background:
+                    liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
+                      ? "#ef4444"
+                      : "var(--accent-cyan)",
+                  boxShadow:
+                    liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
+                      ? "0 0 16px rgba(239,68,68,0.4)"
+                      : "0 0 16px rgba(56,189,248,0.3)",
+                }}
+                disabled={loading}
+                onClick={toggleLiveCapture}
+              >
+                {loading ? (
+                  <RefreshCw size={14} style={{ animation: "spin 1s linear infinite" }} />
+                ) : liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? (
+                  <Square size={14} />
+                ) : (
+                  <Radio size={14} />
+                )}
+                <span>
+                  {liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
+                    ? "STOP CAPTURE"
+                    : "START LIVE CAPTURE"}
+                </span>
+              </button>
+            </div>
+
+            {/* Live Metrics Strip */}
+            <div
+              style={{
+                display: "flex",
+                gap: 16,
+                padding: "10px 14px",
+                borderRadius: 8,
+                background: "rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.06)",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>Status:</span>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    fontFamily: "var(--font-mono)",
+                    color:
+                      liveStatus === "RUNNING"
+                        ? "#10b981"
+                        : liveStatus === "RUNNING_SIMULATED"
+                        ? "#38bdf8"
+                        : "var(--text-muted)",
+                  }}
+                >
+                  {liveStatus === "RUNNING"
+                    ? "● LIVE NPCAP ACTIVE"
+                    : liveStatus === "RUNNING_SIMULATED"
+                    ? "● SIMULATED TELEMETRY ACTIVE"
+                    : "STOPPED"}
+                </span>
+              </div>
+
+              <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)" }} />
+
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                Packets: <strong style={{ color: "#fff" }}>{liveStats.packets}</strong>
+              </div>
+
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                Flows Extracted: <strong style={{ color: "#fff" }}>{liveStats.flows}</strong>
+              </div>
+
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
+                Windows Evaluated: <strong style={{ color: "var(--accent-cyan)" }}>{liveStats.windows}</strong>
+              </div>
+
+              {liveStats.error && (
+                <div style={{ width: "100%", fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                  ⚠️ {liveStats.error}
+                </div>
+              )}
+            </div>
+
+            {/* Live Flow Telemetry Stream */}
+            {recentFlows.length > 0 && (
+              <div
+                style={{
+                  background: "rgba(0,0,0,0.45)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  padding: "10px 14px",
+                  maxHeight: 130,
+                  overflowY: "auto",
+                }}
+              >
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-cyan)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+                  Live Extracted Flow Stream (Real-Time Bidirectional 5-Tuples)
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {recentFlows.slice().reverse().map((f, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        fontSize: 10,
+                        fontFamily: "var(--font-mono)",
+                        color: "var(--text-muted)",
+                        padding: "3px 6px",
+                        borderRadius: 4,
+                        background: idx === 0 ? "rgba(56,189,248,0.12)" : "rgba(255,255,255,0.02)",
+                      }}
+                    >
+                      <span>
+                        <strong style={{ color: "#fff" }}>{f.src}</strong> → <strong style={{ color: "var(--accent-cyan)" }}>{f.dst}</strong>
+                      </span>
+                      <div style={{ display: "flex", gap: 12 }}>
+                        <span style={{ color: f.proto === "TCP" ? "#38bdf8" : "#f59e0b", fontWeight: 700 }}>{f.proto}</span>
+                        <span>{f.packets} pkts ({f.bytes} B)</span>
+                        <span>{f.duration_ms} ms</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Quick Threat Test Vector Chips */}
         <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
           <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.6, marginRight: 4 }}>
@@ -571,6 +891,34 @@ export const DetectionPipelineView: React.FC = () => {
         <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: 8, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
           <XCircle size={16} color="#ef4444" />
           <span style={{ color: "#ef4444", fontSize: 13 }}>{error}</span>
+        </div>
+      )}
+
+      {/* ── Live TAP Standing-by / Capturing Card ──────────────────────── */}
+      {!result && !loading && inputMode === "live" && (
+        <div className="panel" style={{ padding: "34px 24px", textAlign: "center", borderRadius: 10 }}>
+          <Radio
+            size={36}
+            color={liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "#10b981" : "var(--accent-cyan)"}
+          />
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginTop: 12 }}>
+            {liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
+              ? "Live Network Packet Sniffing Active"
+              : "Live Network TAP Ready"}
+          </div>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, maxWidth: 480, marginInline: "auto" }}>
+            {liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
+              ? `Extracting 35-feature bidirectional flows in real-time (${liveStats.flows} flows collected). MEIC-ViT will evaluate each 35-flow window automatically, or immediately when you click STOP CAPTURE.`
+              : "Select your active network interface (e.g. Wi-Fi) above and click START LIVE CAPTURE to begin sniffing live traffic from your computer."}
+          </div>
+          {(liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") && (
+            <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 20 }}>
+              <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+                Current Window Ingestion:{" "}
+                <strong style={{ color: "var(--accent-cyan)" }}>{liveStats.flows % 35} / 35 flows</strong>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

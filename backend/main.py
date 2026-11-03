@@ -56,6 +56,7 @@ from pipeline import (
     THREAT_LEVELS_UNSW,
     UNSW_CLASSES,
 )
+from live_capture import LiveCaptureEngine, list_network_interfaces
 
 # ── App setup ──────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -1002,6 +1003,54 @@ def toggle_lockdown():
         "lockdown_active": SOC_STATE["lockdown_active"],
         "message": "EMERGENCY LOCKDOWN ENGAGED" if SOC_STATE["lockdown_active"] else "Lockdown Disengaged. Normal Operations Resumed."
     }
+
+# ════════════════════════════════════════════════════════════════════════════════
+# ── Live Network Traffic Capture & Detection Pipeline (Phase 5) ─────────────────
+# ════════════════════════════════════════════════════════════════════════════════
+
+class LiveInferenceAdapter:
+    """Feeds live flow records directly into MEIC-ViT Vision Transformer with pure raw Softmax inference."""
+    def predict_flow_batch(self, flow_records: list) -> dict:
+        df = pd.DataFrame(flow_records)
+        return run_inference(
+            df,
+            max_windows=5,
+            model=MODEL,
+            meta=META,
+            classes=CLASSES,
+            threat_map=THREAT_LEVELS
+        )
+
+LIVE_ENGINE = LiveCaptureEngine(LiveInferenceAdapter())
+
+class LiveStartRequest(BaseModel):
+    interface: Optional[str] = "Wi-Fi"
+
+@app.get("/api/live/interfaces")
+def get_live_interfaces():
+    """Enumerates available physical and virtual network interfaces on Windows."""
+    return {"interfaces": list_network_interfaces()}
+
+@app.post("/api/live/start")
+def start_live_capture(req: Optional[LiveStartRequest] = None):
+    """Starts live packet capture & flow feature aggregation."""
+    iface = req.interface if req and req.interface else "Wi-Fi"
+    return LIVE_ENGINE.start_capture(iface)
+
+@app.post("/api/live/stop")
+def stop_live_capture():
+    """Stops live capture cleanly."""
+    return LIVE_ENGINE.stop_capture()
+
+@app.get("/api/live/status")
+def get_live_status():
+    """Reports status, packet counters, and queue length."""
+    return LIVE_ENGINE.get_status()
+
+@app.get("/api/live/events")
+def get_live_events(limit: int = 20):
+    """Retrieves recent real-time flow window inference results."""
+    return {"events": LIVE_ENGINE.get_recent_events(limit=limit)}
 
 # ── Entrypoint ─────────────────────────────────────────────────────────────────
 if __name__ == "__main__":

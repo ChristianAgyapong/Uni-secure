@@ -290,5 +290,62 @@ export const API = {
       method: "POST",
       body: JSON.stringify({ batch_size }),
     }),
+
+  // Live Network Capture & Detection (Phase 5 & 6)
+  getLiveInterfaces: () =>
+    api<{ interfaces: Array<{ id: string; name: string; description: string; ips: string[]; is_wifi: boolean; is_ethernet: boolean }> }>("/api/live/interfaces"),
+
+  startLiveCapture: (interface_name?: string) =>
+    api<{ status: string; interface: string }>("/api/live/start", {
+      method: "POST",
+      body: JSON.stringify({ interface: interface_name ?? "Wi-Fi" }),
+    }),
+
+  stopLiveCapture: () =>
+    api<{
+      status: string;
+      packets_captured: number;
+      flows_completed: number;
+      windows_processed: number;
+      result?: AnalysisResult;
+    }>("/api/live/stop", {
+      method: "POST",
+    }),
+
+  getLiveStatus: () =>
+    api<{
+      status: "STOPPED" | "RUNNING" | "RUNNING_SIMULATED" | "ERROR";
+      interface: string;
+      packets_captured: number;
+      flows_completed: number;
+      windows_processed: number;
+      pending_flows_in_buffer: number;
+      recent_events_count: number;
+      recent_flows?: Array<{
+        src: string;
+        dst: string;
+        proto: string;
+        packets: number;
+        bytes: number;
+        duration_ms: number;
+      }>;
+      error: string | null;
+    }>("/api/live/status"),
+
+  getLiveEvents: (limit = 20) =>
+    api<{
+      events: Array<{
+        id: string;
+        timestamp: number;
+        interface: string;
+        n_flows: number;
+        highest_threat: string;
+        n_attack_windows: number;
+        primary_prediction: string;
+        confidence: number;
+        recent_sample_flow?: { src: string; dst: string; proto: string };
+        window_detail?: WindowResult;
+      }>;
+    }>(`/api/live/events?limit=${limit}`),
 };
 
