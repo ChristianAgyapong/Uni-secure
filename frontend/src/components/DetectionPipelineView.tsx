@@ -590,7 +590,8 @@ export const DetectionPipelineView: React.FC = () => {
                   <option value="UNSW Worms Sample">🔴 UNSW Worms Critical Propagation</option>
                   <option value="UNSW Normal Baseline">🟢 UNSW Clean Enterprise Baseline</option>
                 </optgroup>
-                <optgroup label="Combined Cross-Dataset Benchmark">
+                <optgroup label="Zero-Day / Out-of-Distribution Scenarios">
+                  <option value="Zero-Day APT Exfiltration (Unseen Attack)">⚡ Zero-Day APT Exfiltration (Untrained Zero-Day Attack)</option>
                   <option value="Dual-Dataset Cross Benchmark">⚡ Dual-Dataset Mixed Traffic (CICIDS + UNSW Combined)</option>
                 </optgroup>
               </select>
@@ -631,6 +632,9 @@ export const DetectionPipelineView: React.FC = () => {
                   <option value="UNSW Worms">UNSW Worms Propagation</option>
                   <option value="UNSW Reconnaissance">UNSW Reconnaissance Sweep</option>
                   <option value="UNSW Normal">UNSW Normal Baseline (98% Conf)</option>
+                </optgroup>
+                <optgroup label="Out-of-Distribution / Zero-Day (Untrained)">
+                  <option value="Zero-Day APT Exfiltration">⚡ Zero-Day APT Exfiltration (Untrained Threat)</option>
                 </optgroup>
               </select>
             </div>
@@ -868,6 +872,7 @@ export const DetectionPipelineView: React.FC = () => {
             { label: "DDoS SYN Flood", icon: "🔴", attack: "DDoS Attack" },
             { label: "PortScan Recon", icon: "🟠", attack: "PortScan Probe" },
             { label: "Botnet C2 Beacon", icon: "🟠", attack: "Botnet C2 Beaconing" },
+            { label: "Zero-Day APT", icon: "⚡", attack: "Zero-Day APT Exfiltration" },
             { label: "UNSW Exploits", icon: "🔴", attack: "UNSW Exploits" },
             { label: "UNSW Generic", icon: "🔴", attack: "UNSW Generic" },
             { label: "UNSW Worms", icon: "🔴", attack: "UNSW Worms" },

@@ -109,6 +109,7 @@ SAMPLE_FILES = {
     "Mixed Attack Traffic":    "sample_mixed_attack_traffic.csv",
     "Heartbleed Exploit":      "sample_heartbleed_traffic.csv",
     "Web SQL Injection":       "sample_sqlinjection_traffic.csv",
+    "Zero-Day APT Exfiltration (Unseen Attack)": "sample_zeroday_traffic.csv",
     "UNSW Exploits Sample":    "sample_unsw_exploits.csv",
     "UNSW Generic Sample":     "sample_unsw_generic.csv",
     "UNSW Worms Sample":       "sample_unsw_worms.csv",

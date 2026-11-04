@@ -627,8 +627,12 @@ def simulate_traffic_stream(attack_type="DDoS", n_flows=70):
     mixed_path = os.path.join(sample_dir, "sample_mixed_attack_traffic.csv")
     hb_path = os.path.join(sample_dir, "sample_heartbleed_traffic.csv")
     sqli_path = os.path.join(sample_dir, "sample_sqlinjection_traffic.csv")
+    zd_path = os.path.join(sample_dir, "sample_zeroday_traffic.csv")
     
     try:
+        if attack_type in ("Zero-Day APT Exfiltration", "Zero-Day Exploit", "Zero-Day Attack", "Zero-Day APT Exfiltration (Unseen Attack)") and os.path.exists(zd_path):
+            df_zd = pd.read_csv(zd_path)
+            return df_zd.sample(min(n_flows, len(df_zd)), replace=(n_flows > len(df_zd)), random_state=42).reset_index(drop=True)
         if attack_type == "Normal Traffic" and os.path.exists(benign_path):
             df_b = pd.read_csv(benign_path)
             return df_b.sample(min(n_flows, len(df_b)), replace=(n_flows > len(df_b)), random_state=42).reset_index(drop=True)
