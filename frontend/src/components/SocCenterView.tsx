@@ -142,6 +142,39 @@ export const SocCenterView: React.FC = () => {
               <span>{lockdownActive ? "LOCKDOWN ACTIVE (DISENGAGE)" : "ENGAGE LOCKDOWN"}</span>
             </button>
 
+            <button
+              onClick={() => {
+                if (threats) {
+                  const newEv = {
+                    id: `EV-SIM-${Date.now()}`,
+                    title: "SQL Injection Probe (Simulated Active Threat)",
+                    severity: "CRITICAL",
+                    color: "#ef4444",
+                    timestamp: "Just now",
+                    confidence: 0.985,
+                    baseline_entropy: 3.2,
+                    detected_entropy: 8.6,
+                    confirmed: false,
+                    dismissed: false,
+                    signature_bars: [
+                      { label: "Query Length", baseline: 25, current: 95 },
+                      { label: "Special Chars", baseline: 5, current: 85 },
+                      { label: "Flow IAT Min", baseline: 40, current: 90 },
+                    ],
+                  };
+                  setThreats({
+                    ...threats,
+                    flagged_events: [newEv, ...threats.flagged_events],
+                  });
+                }
+              }}
+              className="btn-secondary-soc"
+              style={{ padding: "8px 12px", fontSize: 12, borderColor: "rgba(245,158,11,0.4)", color: "#f59e0b" }}
+            >
+              <AlertTriangle size={13} color="#f59e0b" />
+              <span>Simulate Threat Event</span>
+            </button>
+
             <button onClick={fetchAllSocData} disabled={loading} className="btn-secondary-soc" style={{ padding: "8px 14px", fontSize: 12 }}>
               <RefreshCw size={13} style={{ animation: loading ? "spin 1s linear infinite" : "none" }} />
               <span>Refresh SOC</span>
@@ -244,21 +277,38 @@ export const SocCenterView: React.FC = () => {
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{
                       fontSize: 9, fontWeight: 700, padding: "2px 6px", borderRadius: 3,
-                      background: node.is_alert ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)",
-                      color: node.is_alert ? "#ef4444" : "#10b981",
+                      background: node.isolated
+                        ? "rgba(245,158,11,0.2)"
+                        : node.is_alert
+                        ? "rgba(239,68,68,0.2)"
+                        : "rgba(16,185,129,0.2)",
+                      color: node.isolated
+                        ? "#f59e0b"
+                        : node.is_alert
+                        ? "#ef4444"
+                        : "#10b981",
+                      border: `1px solid ${
+                        node.isolated
+                          ? "rgba(245,158,11,0.4)"
+                          : node.is_alert
+                          ? "rgba(239,68,68,0.4)"
+                          : "rgba(16,185,129,0.4)"
+                      }`,
                     }}>
                       {node.status}
                     </span>
 
                     <button
-                      onClick={() => handleIsolateNode(node.id, false)}
+                      onClick={() => handleIsolateNode(node.id, !!node.isolated)}
                       style={{
                         fontSize: 10, fontWeight: 700, padding: "4px 8px", borderRadius: 4, cursor: "pointer",
-                        background: "rgba(255,255,255,0.05)", border: "1px solid var(--border)",
-                        color: "var(--text-muted)",
+                        background: node.isolated ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                        border: `1px solid ${node.isolated ? "#10b981" : "rgba(239,68,68,0.5)"}`,
+                        color: node.isolated ? "#10b981" : "#ef4444",
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      Quarantine
+                      {node.isolated ? "RESTORE" : "QUARANTINE"}
                     </button>
                   </div>
                 </div>

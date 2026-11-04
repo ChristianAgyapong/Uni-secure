@@ -1,6 +1,8 @@
 import React, { Suspense, lazy, useState, useEffect } from "react";
 import { Sidebar, ResearchTab } from "./components/Sidebar";
 import { Header } from "./components/Header";
+import { EmergencyAlertBanner } from "./components/EmergencyAlertBanner";
+import { alertService, ThreatAlert } from "./services/alertService";
 import { API } from "./api/client";
 import "./index.css";
 
@@ -23,15 +25,37 @@ const SocCenterView = lazy(() =>
 export function App() {
   const [currentTab, setCurrentTab] = useState<ResearchTab>("pipeline");
   const [isModelReady, setIsModelReady] = useState(false);
+  const [activeAlert, setActiveAlert] = useState<ThreatAlert | null>(null);
 
   useEffect(() => {
     API.health()
       .then((res) => setIsModelReady(res.model_loaded && res.trained))
       .catch(() => setIsModelReady(false));
+
+    const unsubAlert = alertService.subscribeAlert((alert) => setActiveAlert(alert));
+    return () => unsubAlert();
   }, []);
+
+  const handleInspect = (windowId: number) => {
+    setCurrentTab("pipeline");
+    // Scroll smoothly to detail inspection card if on page
+    setTimeout(() => {
+      const el = document.getElementById("window-detail-inspector");
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 150);
+  };
 
   return (
     <div className="soc-shell">
+      {/* ── Real-Time Floating Emergency Alarm Banner ── */}
+      <EmergencyAlertBanner
+        alert={activeAlert}
+        onDismiss={() => alertService.dismissAlert()}
+        onInspect={handleInspect}
+      />
+
       {/* ── Left Sidebar (Paper Focused) ── */}
       <Sidebar
         currentTab={currentTab}

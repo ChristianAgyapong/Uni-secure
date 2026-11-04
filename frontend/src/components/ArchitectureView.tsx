@@ -280,16 +280,34 @@ export const ArchitectureView: React.FC = () => {
 
         {/* Right: Dynamic Tensor Parameter Calculator */}
         <div className="panel" style={{ padding: 18 }}>
-          <div className="panel-title" style={{ marginBottom: 12 }}>
-            <Calculator size={15} color="var(--accent-cyan)" />
-            <span>Real-Time Hyperparameter & Tensor Sizer</span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <div className="panel-title">
+              <Calculator size={15} color="var(--accent-cyan)" />
+              <span>Real-Time Hyperparameter & Tensor Sizer</span>
+            </div>
+            <button
+              onClick={() => {
+                setCalcW(35);
+                setCalcS(18);
+                setCalcD(256);
+                setCalcLayers(6);
+                setCalcHeads(8);
+              }}
+              style={{
+                fontSize: 10, padding: "3px 8px", borderRadius: 4, cursor: "pointer",
+                background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)",
+                color: "var(--accent-cyan)",
+              }}
+            >
+              Reset to Paper Baseline
+            </button>
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
                 <span style={{ color: "var(--text-muted)" }}>Window Size (W = {calcW} flows)</span>
-                <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>35 flows</span>
+                <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>{calcW} flows</span>
               </div>
               <input type="range" min="20" max="50" value={calcW} onChange={(e) => setCalcW(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent-cyan)" }} />
             </div>
@@ -300,6 +318,14 @@ export const ArchitectureView: React.FC = () => {
                 <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>{overlapPct}% Overlap</span>
               </div>
               <input type="range" min="5" max="35" value={calcS} onChange={(e) => setCalcS(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent-cyan)" }} />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 4 }}>
+                <span style={{ color: "var(--text-muted)" }}>Transformer Layers (L = {calcLayers})</span>
+                <span style={{ color: "var(--accent-purple)", fontFamily: "var(--font-mono)" }}>{calcLayers} Layers</span>
+              </div>
+              <input type="range" min="2" max="12" step="1" value={calcLayers} onChange={(e) => setCalcLayers(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent-purple)" }} />
             </div>
 
             <div>
@@ -323,6 +349,18 @@ export const ArchitectureView: React.FC = () => {
                 <div style={{ fontSize: 14, fontWeight: 800, color: "#10b981", fontFamily: "var(--font-mono)", marginTop: 2 }}>
                   {gflopsPerWindow} G
                 </div>
+              </div>
+            </div>
+
+            {/* Edge Deployment Precision Profiles */}
+            <div style={{ marginTop: 4, background: "rgba(255,255,255,0.02)", border: "1px solid var(--border)", borderRadius: 6, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", marginBottom: 4 }}>
+                Edge Deployment RAM Footprint by Precision:
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, fontFamily: "var(--font-mono)" }}>
+                <span>FP32: <strong style={{ color: "var(--accent-cyan)" }}>{(estimatedParams * 4 / (1024 * 1024)).toFixed(1)} MB</strong></span>
+                <span>FP16: <strong style={{ color: "#10b981" }}>{(estimatedParams * 2 / (1024 * 1024)).toFixed(1)} MB</strong></span>
+                <span>INT8: <strong style={{ color: "#f59e0b" }}>{(estimatedParams * 1 / (1024 * 1024)).toFixed(1)} MB</strong></span>
               </div>
             </div>
           </div>

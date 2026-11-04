@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from "react";
-import { ShieldCheck, Zap, Radio, Clock, AlertTriangle, ShieldAlert } from "lucide-react";
+import { ShieldCheck, Zap, Radio, Clock, AlertTriangle, ShieldAlert, Volume2, VolumeX, Bell } from "lucide-react";
 import { API } from "../api/client";
+import { alertService, ThreatAlert } from "../services/alertService";
 
 export const Header: React.FC = () => {
   const [timeStr, setTimeStr] = useState<string>("");
   const [lockdown, setLockdown] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(alertService.isMuted());
+  const [activeAlert, setActiveAlert] = useState<ThreatAlert | null>(null);
 
   useEffect(() => {
     const updateTime = () => {
       const now = new Date();
-      setTimeStr(now.toTimeString().split(" ")[0] + " UTC");
+      const hours = String(now.getUTCHours()).padStart(2, "0");
+      const minutes = String(now.getUTCMinutes()).padStart(2, "0");
+      setTimeStr(`${hours}:${minutes} UTC`);
     };
     updateTime();
     const interval = setInterval(updateTime, 1000);
@@ -20,7 +25,18 @@ export const Header: React.FC = () => {
     API.health()
       .then((res) => setLockdown(res.lockdown_active))
       .catch(() => {});
+
+    const unsubAlert = alertService.subscribeAlert((alert) => setActiveAlert(alert));
+    const unsubMute = alertService.subscribeMute((muted) => setIsMuted(muted));
+    return () => {
+      unsubAlert();
+      unsubMute();
+    };
   }, []);
+
+  const toggleSound = () => {
+    alertService.toggleMute();
+  };
 
   return (
     <header className="soc-header" style={{ height: 64, padding: "0 24px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -57,38 +73,78 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Operational Live Status & Telemetry Indicators */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         {/* Sensor Status */}
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
           background: "rgba(16, 185, 129, 0.08)", border: "1px solid rgba(16, 185, 129, 0.25)",
-          padding: "4px 10px", borderRadius: 6, fontSize: 11, color: "#10b981", fontWeight: 600,
+          padding: "5px 10px", borderRadius: 6, fontSize: 11, color: "#10b981", fontWeight: 600,
         }}>
           <span style={{ position: "relative", display: "inline-flex", width: 7, height: 7 }}>
             <span style={{ position: "absolute", inset: 0, borderRadius: "50%", background: "#10b981", opacity: 0.6, animation: "ping 1.4s cubic-bezier(0,0,0.2,1) infinite" }} />
             <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10b981" }} />
           </span>
-          <span>SENSOR NETWORK ONLINE</span>
+          <span>ONLINE</span>
         </div>
 
-        {/* Vectors Monitored */}
-        <div style={{
-          display: "flex", alignItems: "center", gap: 6,
-          background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.25)",
-          padding: "4px 10px", borderRadius: 6, fontSize: 11, color: "var(--accent-cyan)", fontWeight: 600,
-        }}>
-          <Zap size={13} />
-          <span>15 ATTACK VECTORS ARMED</span>
-        </div>
+        {/* Audio Alarm Icon Toggle */}
+        <button
+          onClick={toggleSound}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 32,
+            height: 32,
+            background: isMuted ? "rgba(239, 68, 68, 0.12)" : "rgba(16, 185, 129, 0.12)",
+            border: `1px solid ${isMuted ? "rgba(239, 68, 68, 0.35)" : "rgba(16, 185, 129, 0.35)"}`,
+            borderRadius: 6,
+            color: isMuted ? "#ef4444" : "#10b981",
+            cursor: "pointer",
+            transition: "all 0.15s",
+          }}
+          title={isMuted ? "Audio Alarms Muted (Click to Arm Sound)" : "Audio Alarms Active (Click to Mute Sound)"}
+        >
+          {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+        </button>
 
-        {/* Clock */}
+        {/* Active Alert Threat Pill */}
+        {activeAlert && (
+          <div
+            onClick={() => {
+              const el = document.getElementById("window-detail-inspector");
+              if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+            }}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: activeAlert.threat_level === "CRITICAL" ? "rgba(239, 68, 68, 0.2)" : "rgba(249, 115, 22, 0.2)",
+              border: `1px solid ${activeAlert.threat_level === "CRITICAL" ? "#ef4444" : "#f97316"}`,
+              padding: "5px 10px",
+              borderRadius: 6,
+              fontSize: 11,
+              fontWeight: 800,
+              color: activeAlert.threat_level === "CRITICAL" ? "#ef4444" : "#f97316",
+              boxShadow: activeAlert.threat_level === "CRITICAL" ? "0 0 12px rgba(239, 68, 68, 0.5)" : "0 0 10px rgba(249, 115, 22, 0.4)",
+              animation: "pulse 1.2s infinite",
+              cursor: "pointer",
+            }}
+            title="Active threat detected. Click to inspect details."
+          >
+            <AlertTriangle size={13} />
+            <span>{activeAlert.threat_level} THREAT</span>
+          </div>
+        )}
+
+        {/* UTC Clock */}
         <div style={{
           display: "flex", alignItems: "center", gap: 6,
           background: "rgba(255, 255, 255, 0.03)", border: "1px solid var(--border)",
-          padding: "4px 10px", borderRadius: 6, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)",
+          padding: "5px 10px", borderRadius: 6, fontSize: 11, color: "var(--text-muted)", fontFamily: "var(--font-mono)",
         }}>
           <Clock size={12} />
-          <span>{timeStr || "SYSTEM CLOCK"}</span>
+          <span>{timeStr || "UTC"}</span>
         </div>
 
         {/* Lockdown Status indicator */}
@@ -96,11 +152,11 @@ export const Header: React.FC = () => {
           <div style={{
             display: "flex", alignItems: "center", gap: 6,
             background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.4)",
-            padding: "4px 10px", borderRadius: 6, fontSize: 11, color: "#ef4444", fontWeight: 700,
+            padding: "5px 10px", borderRadius: 6, fontSize: 11, color: "#ef4444", fontWeight: 700,
             animation: "pulse 1.5s infinite",
           }}>
             <ShieldAlert size={14} />
-            <span>CAMPUS LOCKDOWN ACTIVE</span>
+            <span>LOCKDOWN</span>
           </div>
         )}
       </div>

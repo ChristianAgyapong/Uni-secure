@@ -24,6 +24,7 @@ export interface OverviewData {
     x: number;
     y: number;
     last_active: string;
+    isolated?: boolean;
   }>;
   live_detections: Array<{
     id: string;

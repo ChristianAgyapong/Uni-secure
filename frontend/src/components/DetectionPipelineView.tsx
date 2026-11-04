@@ -28,6 +28,7 @@ import {
   Radio,
 } from "lucide-react";
 import { API, AnalysisResult, WindowResult } from "../api/client";
+import { alertService } from "../services/alertService";
 
 /* ─── Threat Level helpers ─────────────────────────────────────────────────── */
 function getThreatMeta(level: string) {
@@ -301,11 +302,17 @@ export const DetectionPipelineView: React.FC = () => {
             setRecentFlows(st.recent_flows);
           }
           if (st.current_result && st.current_result.windows && st.current_result.windows.length > 0) {
+            const wins = st.current_result.windows;
+            const latestWin = wins[wins.length - 1];
             setResult(st.current_result);
             setSelectedWindow((prev) => {
-              if (!prev) return st.current_result!.windows[st.current_result!.windows.length - 1];
-              const match = st.current_result!.windows.find((w) => w.window === prev.window);
-              return match || st.current_result!.windows[st.current_result!.windows.length - 1];
+              if (!prev) return latestWin;
+              // If new window arrived, auto-switch to it so the operator sees the new inference
+              if (latestWin.window > prev.window) {
+                return latestWin;
+              }
+              const match = wins.find((w) => w.window === prev.window);
+              return match || latestWin;
             });
           }
         } catch (e) {}
@@ -330,6 +337,23 @@ export const DetectionPipelineView: React.FC = () => {
 
   /* Auto-run DDoS preset on mount */
   useEffect(() => { runPreset("DDoS Attack Sample"); }, []);
+
+  /* Report critical/high/medium threats to global audio & visual emergency alarm */
+  useEffect(() => {
+    if (!result || !result.windows || result.windows.length === 0) return;
+    const attackWins = result.windows.filter((w) => {
+      const p = (w.prediction || "").toUpperCase();
+      return (
+        !p.startsWith("BENIGN") &&
+        !p.startsWith("NORMAL") &&
+        (w.threat_level === "CRITICAL" || w.threat_level === "HIGH" || w.threat_level === "MEDIUM")
+      );
+    });
+    if (attackWins.length > 0) {
+      const targetWin = attackWins[attackWins.length - 1];
+      alertService.reportWindow(targetWin, selectedInterface || "Wi-Fi TAP");
+    }
+  }, [result, selectedInterface]);
 
   /* ── Run handlers ─────────────────────────────────────────────────────────── */
   const runPreset = async (name: string) => {
@@ -766,6 +790,21 @@ export const DetectionPipelineView: React.FC = () => {
                 Windows Evaluated: <strong style={{ color: "var(--accent-cyan)" }}>{liveStats.windows}</strong>
               </div>
 
+              {selectedWindow && (
+                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Active Triage:</span>
+                  <span style={{
+                    fontSize: 11, fontWeight: 700, fontFamily: "var(--font-mono)",
+                    color: getThreatMeta(selectedWindow.threat_level).color,
+                    background: getThreatMeta(selectedWindow.threat_level).bg,
+                    border: `1px solid ${getThreatMeta(selectedWindow.threat_level).border}`,
+                    padding: "2px 8px", borderRadius: 4,
+                  }}>
+                    Window #{selectedWindow.window + 1}: {selectedWindow.prediction} ({(selectedWindow.confidence * 100).toFixed(1)}%)
+                  </span>
+                </div>
+              )}
+
               {liveStats.error && (
                 <div style={{ width: "100%", fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
                   ⚠️ {liveStats.error}
@@ -828,6 +867,7 @@ export const DetectionPipelineView: React.FC = () => {
           {[
             { label: "DDoS SYN Flood", icon: "🔴", attack: "DDoS Attack" },
             { label: "PortScan Recon", icon: "🟠", attack: "PortScan Probe" },
+            { label: "Botnet C2 Beacon", icon: "🟠", attack: "Botnet C2 Beaconing" },
             { label: "UNSW Exploits", icon: "🔴", attack: "UNSW Exploits" },
             { label: "UNSW Generic", icon: "🔴", attack: "UNSW Generic" },
             { label: "UNSW Worms", icon: "🔴", attack: "UNSW Worms" },
@@ -1162,7 +1202,7 @@ export const DetectionPipelineView: React.FC = () => {
 
               {/* Attention heatmap + probabilities */}
               {selectedWindow && (
-                <div className="panel" style={{ padding: 16 }}>
+                <div id="window-detail-inspector" className="panel" style={{ padding: 16 }}>
                   <div className="panel-header" style={{ marginBottom: 12 }}>
                     <div className="panel-title">
                       <Eye size={14} color="var(--accent-purple)" />

@@ -137,6 +137,26 @@ body {
   50% { opacity: 0.4; transform: scale(0.85); }
 }
 
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+
+@keyframes alertPulse {
+  0% {
+    box-shadow: 0 8px 30px rgba(239, 68, 68, 0.45), 0 0 15px rgba(239, 68, 68, 0.3);
+  }
+  100% {
+    box-shadow: 0 12px 48px rgba(239, 68, 68, 0.7), 0 0 28px rgba(239, 68, 68, 0.55);
+  }
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;

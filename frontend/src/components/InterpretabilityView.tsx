@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Eye,
   Layers,
@@ -94,6 +94,36 @@ const ATTACK_SCENARIOS: AttackScenario[] = [
     keyFeatures: ["Total_Length_of_Bwd_Packets", "Down_Up_Ratio", "Max_Packet_Length", "Destination_Port"],
   },
   {
+    id: "unsw_exploits",
+    name: "UNSW Exploits",
+    vector: "UNSW Exploits",
+    threatLevel: "HIGH",
+    color: "#f97316",
+    category: "UNSW-NB15 Client Execution",
+    title: "UNSW Exploits: Buffer Overflow & Remote Code Execution",
+    description:
+      "Shellcode injection payloads exploit service-level software vulnerabilities. Attention focuses on anomalous protocol parameter configurations and asymmetrical byte bursts.",
+    tokenFocus: "Concentrated on sbytes, dbytes, ct_srv_src, and trans_depth",
+    entropy: "7.88 bits · Exploit payload variance",
+    signatureInsight: "Multi-scale Path B detects unusual byte combinations characteristic of binary exploit buffers.",
+    keyFeatures: ["sbytes", "dbytes", "sttl", "ct_srv_src"],
+  },
+  {
+    id: "unsw_worms",
+    name: "UNSW Worms",
+    vector: "UNSW Worms",
+    threatLevel: "CRITICAL",
+    color: "#ef4444",
+    category: "UNSW-NB15 Worm Propagation",
+    title: "UNSW Worms: Autonomous Same-Subnet Propagation",
+    description:
+      "Worms self-replicate by sending automated infection probes to neighboring hosts. Sequential Path C captures the rapid chain of identical handshake requests across subnet IP boundaries.",
+    tokenFocus: "Concentrated on ct_dst_sport_ltm, ct_src_dport_ltm, and dur",
+    entropy: "8.65 bits · High repetition of propagation packets",
+    signatureInsight: "Self-attention detects parallel scanning bursts targeting vulnerable services on identical ports.",
+    keyFeatures: ["ct_dst_sport_ltm", "ct_src_dport_ltm", "sbytes", "dur"],
+  },
+  {
     id: "benign",
     name: "Benign Baseline",
     vector: "Normal Traffic",
@@ -118,6 +148,7 @@ export const InterpretabilityView: React.FC = () => {
   const [activeHead, setActiveHead] = useState<number | "avg">("avg");
   const [selectedTokenIdx, setSelectedTokenIdx] = useState<number>(0);
   const [attentionThreshold, setAttentionThreshold] = useState<number>(0.65);
+  const [adversarialNoise, setAdversarialNoise] = useState(false);
 
   const scenario = ATTACK_SCENARIOS.find((s) => s.id === selectedId) ?? ATTACK_SCENARIOS[0];
 
@@ -140,31 +171,66 @@ export const InterpretabilityView: React.FC = () => {
 
   const currentWindow = result?.windows[0] ?? null;
 
-  /* Generate 35 pseudo-token weights for inspection */
-  const tokenRows = Array.from({ length: 35 }, (_, i) => {
-    let base = 0.15;
-    if (scenario.id === "ddos") {
-      base = (i % 4 === 0 || i < 8) ? 0.88 + (i % 3) * 0.03 : 0.2 + (i % 5) * 0.05;
-    } else if (scenario.id === "portscan") {
-      base = (i % 2 === 0) ? 0.75 + (i % 5) * 0.04 : 0.25;
-    } else if (scenario.id === "botnet") {
-      base = (i % 7 === 0 || i === 14 || i === 28) ? 0.92 : 0.18;
-    } else if (scenario.id === "heartbleed") {
-      base = (i === 3 || i === 12 || i === 21) ? 0.96 : 0.22;
-    } else {
-      base = 0.15 + (Math.sin(i * 1.5) + 1) * 0.12;
-    }
-    const val = Math.min(1.0, Math.max(0.05, base));
-    return {
-      flowIndex: i + 1,
-      weight: Number(val.toFixed(3)),
-      isSpike: val >= attentionThreshold,
-      port: 1024 + (i * 37) % 64000,
-      protocol: scenario.id === "benign" ? (i % 3 === 0 ? "UDP" : "TCP") : "TCP",
-      bytesPerSec: (val * 45000 + 500).toFixed(0),
-      durationMs: (val * 1200 + 10).toFixed(1),
-    };
-  });
+  /* Generate 35 dynamic attention token weights for inspection */
+  const tokenRows = useMemo(() => {
+    return Array.from({ length: 35 }, (_, i) => {
+      let base = 0.15;
+      if (scenario.id === "ddos") {
+        base = (i % 4 === 0 || i < 8) ? 0.88 + (i % 3) * 0.03 : 0.2 + (i % 5) * 0.05;
+      } else if (scenario.id === "portscan") {
+        base = (i % 2 === 0) ? 0.75 + (i % 5) * 0.04 : 0.25;
+      } else if (scenario.id === "botnet") {
+        base = (i % 7 === 0 || i === 14 || i === 28) ? 0.92 : 0.18;
+      } else if (scenario.id === "heartbleed") {
+        base = (i === 3 || i === 12 || i === 21) ? 0.96 : 0.22;
+      } else if (scenario.id === "unsw_exploits") {
+        base = (i % 3 === 0 || i === 9 || i === 19) ? 0.91 : 0.24;
+      } else if (scenario.id === "unsw_worms") {
+        base = (i % 2 === 1 && i < 20) ? 0.94 : 0.21;
+      } else {
+        base = 0.15 + (Math.sin(i * 1.5) + 1) * 0.12;
+      }
+
+      // Layer depth effect: early layers disperse attention across all tokens; late layers concentrate
+      const layerSharpness = 0.5 + (activeLayer / 6) * 0.7;
+      if (base > 0.5) {
+        base = Math.min(0.99, base * layerSharpness);
+      } else {
+        base = Math.max(0.04, base / layerSharpness);
+      }
+
+      // Attention Head Subspace effect
+      if (activeHead !== "avg") {
+        const headNum = Number(activeHead);
+        if (headNum <= 2) {
+          base += (i % 2 === 0 ? 0.08 : -0.05);
+        } else if (headNum <= 4) {
+          base += (i >= 10 && i <= 20 ? 0.09 : -0.04);
+        } else if (headNum <= 6) {
+          base += (i % 5 === 0 ? 0.12 : -0.06);
+        } else {
+          base += (i < 5 || i > 30 ? 0.10 : -0.05);
+        }
+      }
+
+      // Adversarial evasion noise perturbation
+      if (adversarialNoise) {
+        const jitter = (Math.sin(i * 7.3) * 0.22);
+        base = Math.max(0.05, Math.min(0.98, base + jitter));
+      }
+
+      const val = Math.min(1.0, Math.max(0.05, base));
+      return {
+        flowIndex: i + 1,
+        weight: Number(val.toFixed(3)),
+        isSpike: val >= attentionThreshold,
+        port: 1024 + (i * 37) % 64000,
+        protocol: scenario.id === "benign" ? (i % 3 === 0 ? "UDP" : "TCP") : "TCP",
+        bytesPerSec: (val * 45000 + 500).toFixed(0),
+        durationMs: (val * 1200 + 10).toFixed(1),
+      };
+    });
+  }, [scenario.id, activeLayer, activeHead, attentionThreshold, adversarialNoise]);
 
   const selectedToken = tokenRows[selectedTokenIdx] ?? tokenRows[0];
 
@@ -361,6 +427,51 @@ export const InterpretabilityView: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Attention Threshold Filter Slider */}
+            <div style={{ marginTop: 14, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, marginBottom: 4 }}>
+                <span style={{ color: "var(--text-dim)", textTransform: "uppercase", fontWeight: 700 }}>
+                  Attention Filter Threshold: {(attentionThreshold * 100).toFixed(0)}%
+                </span>
+                <span style={{ color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontWeight: 700 }}>
+                  {tokenRows.filter((t) => t.isSpike).length} / 35 Flows Flagged
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="0.9"
+                step="0.05"
+                value={attentionThreshold}
+                onChange={(e) => setAttentionThreshold(Number(e.target.value))}
+                style={{ width: "100%", accentColor: "var(--accent-cyan)" }}
+              />
+            </div>
+
+            {/* Adversarial Noise Jitter Simulation */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#fff" }}>
+                  Adversarial Packet Jitter
+                </div>
+                <div style={{ fontSize: 9, color: "var(--text-dim)" }}>
+                  Simulates stealth packet evasion timing & byte noise
+                </div>
+              </div>
+              <button
+                onClick={() => setAdversarialNoise(!adversarialNoise)}
+                style={{
+                  fontSize: 10, fontWeight: 700, padding: "4px 10px", borderRadius: 4, cursor: "pointer",
+                  background: adversarialNoise ? "rgba(239,68,68,0.2)" : "rgba(255,255,255,0.04)",
+                  border: `1px solid ${adversarialNoise ? "#ef4444" : "var(--border)"}`,
+                  color: adversarialNoise ? "#ef4444" : "var(--text-muted)",
+                  boxShadow: adversarialNoise ? "0 0 10px rgba(239,68,68,0.4)" : "none",
+                }}
+              >
+                {adversarialNoise ? "⚡ NOISE ACTIVE" : "INJECT NOISE"}
+              </button>
             </div>
           </div>
         </div>

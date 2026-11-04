@@ -99,6 +99,28 @@ const WINDOW_TUNING = [
 export const PaperBenchmarksView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<"models" | "stress" | "classes" | "tuning" | "live_bench">("models");
   const [selectedClass, setSelectedClass] = useState("DDoS");
+  const [classTestLoading, setClassTestLoading] = useState(false);
+  const [classTestResult, setClassTestResult] = useState<{ pred: string; conf: number; threat: string } | null>(null);
+
+  const testSelectedClass = async (className: string) => {
+    setClassTestLoading(true);
+    setClassTestResult(null);
+    try {
+      const res = await API.simulate(className, 35, 1);
+      if (res.windows && res.windows.length > 0) {
+        const w = res.windows[0];
+        setClassTestResult({
+          pred: w.prediction,
+          conf: w.confidence,
+          threat: w.threat_level,
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setClassTestLoading(false);
+    }
+  };
 
   // Live Hardware Benchmark State
   const [benchRunning, setBenchRunning] = useState(false);
@@ -394,7 +416,10 @@ export const PaperBenchmarksView: React.FC = () => {
                 return (
                   <button
                     key={c}
-                    onClick={() => setSelectedClass(c)}
+                    onClick={() => {
+                      setSelectedClass(c);
+                      setClassTestResult(null);
+                    }}
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "space-between",
                       padding: "8px 10px", borderRadius: 5, cursor: "pointer", border: "1px solid",
@@ -436,16 +461,49 @@ export const PaperBenchmarksView: React.FC = () => {
                 </div>
               </div>
 
-              <div style={{
-                background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)",
-                borderRadius: 6, padding: "6px 12px", textAlign: "right",
-              }}>
-                <div style={{ fontSize: 10, color: "var(--text-dim)" }}>F1 DETECTION SCORE</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#10b981", fontFamily: "var(--font-mono)" }}>
-                  {currClass.f1.toFixed(2)}%
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  onClick={() => testSelectedClass(selectedClass)}
+                  disabled={classTestLoading}
+                  className="btn-primary-soc"
+                  style={{ padding: "6px 14px", fontSize: 11 }}
+                >
+                  {classTestLoading ? <RefreshCw size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Zap size={12} />}
+                  <span>{classTestLoading ? "Testing..." : "Test With ViT Model"}</span>
+                </button>
+
+                <div style={{
+                  background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)",
+                  borderRadius: 6, padding: "6px 12px", textAlign: "right",
+                }}>
+                  <div style={{ fontSize: 10, color: "var(--text-dim)" }}>F1 DETECTION SCORE</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#10b981", fontFamily: "var(--font-mono)" }}>
+                    {currClass.f1.toFixed(2)}%
+                  </div>
                 </div>
               </div>
             </div>
+
+            {classTestResult && (
+              <div style={{
+                marginBottom: 14, padding: "8px 12px", borderRadius: 6,
+                background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.3)",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Zap size={14} color="var(--accent-cyan)" />
+                  <span style={{ fontSize: 11, color: "#fff", fontWeight: 700 }}>
+                    Live Forward-Pass Verification:
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)" }}>
+                    Classified as <strong>{classTestResult.pred}</strong> ({classTestResult.threat} Threat)
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, fontFamily: "var(--font-mono)", fontWeight: 800, color: "#10b981" }}>
+                  {(classTestResult.conf * 100).toFixed(1)}% Confidence
+                </span>
+              </div>
+            )}
 
             {/* Metric Bars */}
             <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 16 }}>
