@@ -24,6 +24,7 @@ Endpoints:
 import io
 import os
 import sys
+import math
 import base64
 import json
 import time
@@ -57,6 +58,28 @@ from pipeline import (
     UNSW_CLASSES,
 )
 from live_capture import LiveCaptureEngine, list_network_interfaces
+
+def sanitize_floats(obj):
+    """
+    Recursively replaces NaN, Inf, -Inf, or non-compliant float values with 0.0 or safe defaults.
+    Guarantees strict RFC 8259 JSON compliance for FastAPI and Starlette serializers.
+    """
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [sanitize_floats(v) for v in obj]
+    elif isinstance(obj, (np.floating, np.integer)):
+        v = float(obj)
+        if math.isnan(v) or math.isinf(v):
+            return 0.0
+        return v
+    elif hasattr(pd, "isna") and pd.isna(obj) and not isinstance(obj, (str, bytes)):
+        return 0.0
+    return obj
 
 # ── App setup ──────────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -159,17 +182,41 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
 
     def _safe_int(val, default=0):
         try:
-            v = int(float(val))
-            return v if v >= 0 else default
+            if val is None or (hasattr(pd, "isna") and pd.isna(val)):
+                return default
+            v = float(val)
+            if math.isnan(v) or math.isinf(v):
+                return default
+            return int(v) if v >= 0 else default
         except Exception:
             return default
 
+    def _safe_float(val, default=0.0):
+        try:
+            if val is None or (hasattr(pd, "isna") and pd.isna(val)):
+                return default
+            v = float(val)
+            if math.isnan(v) or math.isinf(v):
+                return default
+            return v
+        except Exception:
+            return default
+
+    def _safe_str(val, default=""):
+        if val is None or (hasattr(pd, "isna") and pd.isna(val)):
+            return default
+        s = str(val).strip()
+        return default if s.lower() in ("nan", "none", "null", "") else s
+
     def _proto_name(val):
         try:
+            if val is None or (hasattr(pd, "isna") and pd.isna(val)):
+                return "TCP"
             v = int(float(val))
             return {6: "TCP", 17: "UDP", 1: "ICMP"}.get(v, str(v))
         except Exception:
-            return str(val) if val else "TCP"
+            s = str(val).strip()
+            return "TCP" if s.lower() in ("nan", "none", "") else s
 
     _PROTO_MAP = {6: "TCP", 17: "UDP", 1: "ICMP"}
     window_flows = []
@@ -180,19 +227,16 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
         flows = []
         for _, frow in slice_df.iterrows():
             # Support both underscore-style (CICFlowMeter) and hidden _meta columns
-            src_ip  = str(frow.get("_src_ip",  frow.get("Source IP",  frow.get("Src IP",  "192.168.x.x"))))
-            dst_ip  = str(frow.get("_dst_ip",  frow.get("Destination IP", frow.get("Dst IP", "10.x.x.x"))))
+            src_ip  = _safe_str(frow.get("_src_ip",  frow.get("Source IP",  frow.get("Src IP"))), "192.168.1.100")
+            dst_ip  = _safe_str(frow.get("_dst_ip",  frow.get("Destination IP", frow.get("Dst IP"))), "10.0.0.1")
             src_port = _safe_int(frow.get("_src_port", frow.get("Source_Port", frow.get("Source Port", frow.get("Src Port", 0)))))
             dst_port = _safe_int(frow.get("_dst_port", frow.get("Destination_Port", frow.get("Destination Port", frow.get("Dst Port", 0)))))
             proto_raw = frow.get("_proto", frow.get("Protocol", frow.get("protocol", 6)))
             proto     = _proto_name(proto_raw)
-            packets   = _safe_int(frow.get("_packets",  frow.get("Total_Fwd_Packets",   frow.get("Total Fwd Packets",   frow.get("Fwd Packet Length Max", 0)))))
+            packets   = _safe_int(frow.get("_packets",  frow.get("Total_Fwd_Packets",   frow.get("Total Fwd Packets",   frow.get("Fwd Packet Length Max", 1)))))
             byte_val  = _safe_int(frow.get("_bytes",    frow.get("Total_Length_of_Fwd_Packets", frow.get("Total Length of Fwd Packets", 0))))
             dur_raw   = frow.get("Flow_Duration", frow.get("Flow Duration", 0))
-            try:
-                dur_ms = round(float(dur_raw) / 1000.0, 1)
-            except Exception:
-                dur_ms = 0.0
+            dur_ms    = round(_safe_float(dur_raw, 0.0) / 1000.0, 1)
             flows.append({
                 "src_ip":      src_ip,
                 "src_port":    src_port,
@@ -295,7 +339,7 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
     provisional_threats = sum(1 for r in attack_rows if r["confidence_status"] != "CONFIRMED" and not r["is_persistent"])
     has_anomaly = any(r["threat_level"] != "LOW" or r["confidence"] < 0.70 for r in rows)
 
-    return {
+    res_payload = {
         "n_flows": len(df),
         "n_windows": len(imgs),
         "n_attack_windows": n_attack_windows,
@@ -309,6 +353,7 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
         "has_anomaly": has_anomaly,
         "windows": rows,
     }
+    return sanitize_floats(res_payload)
 
 # ── Health & Meta ──────────────────────────────────────────────────────────────
 @app.get("/api/health")
@@ -1194,7 +1239,7 @@ class LiveInferenceAdapter:
             res["threat_counts"][lvl] = res["threat_counts"].get(lvl, 0) + 1
             res["class_counts"][pred] = res["class_counts"].get(pred, 0) + 1
 
-        return res
+        return sanitize_floats(res)
 
 LIVE_ENGINE = LiveCaptureEngine(LiveInferenceAdapter())
 
@@ -1210,17 +1255,17 @@ def get_live_interfaces():
 def start_live_capture(req: Optional[LiveStartRequest] = None):
     """Starts live packet capture & flow feature aggregation."""
     iface = req.interface if req and req.interface else "Wi-Fi"
-    return LIVE_ENGINE.start_capture(iface)
+    return sanitize_floats(LIVE_ENGINE.start_capture(iface))
 
 @app.post("/api/live/stop")
 def stop_live_capture():
     """Stops live capture cleanly."""
-    return LIVE_ENGINE.stop_capture()
+    return sanitize_floats(LIVE_ENGINE.stop_capture())
 
 @app.get("/api/live/status")
 def get_live_status():
     """Reports status, packet counters, and queue length."""
-    return LIVE_ENGINE.get_status()
+    return sanitize_floats(LIVE_ENGINE.get_status())
 
 @app.get("/api/live/events")
 def get_live_events(limit: int = 20):

@@ -175,7 +175,7 @@ class FlowRecord:
 
         src_ip, src_port, dst_ip, dst_port, proto = self.key
 
-        return {
+        feat = {
             # 35 CICIDS-2017 features
             "Packet_Length_Variance": pkt_len_var,
             "Init_Win_bytes_forward": float(self.init_win_fwd if self.init_win_fwd else 255),
@@ -221,8 +221,29 @@ class FlowRecord:
             "_packets": total_packets,
             "_bytes": total_bytes,
         }
+        return sanitize_floats(feat)
 
 import numpy as np
+
+def sanitize_floats(obj: Any) -> Any:
+    """
+    Recursively replaces NaN, Inf, -Inf, or non-compliant float values with 0.0 or safe defaults.
+    Guarantees strict RFC 8259 JSON compliance for FastAPI and Starlette serializers.
+    """
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: sanitize_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [sanitize_floats(v) for v in obj]
+    elif isinstance(obj, (np.floating, np.integer)):
+        v = float(obj)
+        if math.isnan(v) or math.isinf(v):
+            return 0.0
+        return v
+    return obj
 
 
 class LiveCaptureEngine:
@@ -338,7 +359,7 @@ class LiveCaptureEngine:
                     highest = lvl
                     break
 
-            return {
+            session_dict = {
                 "n_flows": self.flows_completed,
                 "n_windows": len(self.session_windows),
                 "n_attack_windows": len(attack_windows),
@@ -352,6 +373,7 @@ class LiveCaptureEngine:
                 "has_anomaly": any(w.get("threat_level") != "LOW" for w in self.session_windows),
                 "windows": list(self.session_windows),
             }
+            return sanitize_floats(session_dict)
 
     def stop_capture(self) -> Dict[str, Any]:
         """
@@ -359,7 +381,7 @@ class LiveCaptureEngine:
         """
         with self._lock:
             if not self.is_running:
-                return {"status": "NOT_RUNNING", "result": self.get_session_result()}
+                return sanitize_floats({"status": "NOT_RUNNING", "result": self.get_session_result()})
 
             self.is_running = False
             self.status = "STOPPED"
@@ -393,13 +415,13 @@ class LiveCaptureEngine:
 
         session_res = self.get_session_result()
         print(f"[LiveCaptureEngine] Stopped capture. Packets: {self.packets_captured}, flows: {self.flows_completed}, windows: {len(self.session_windows)}")
-        return {
+        return sanitize_floats({
             "status": "STOPPED",
             "packets_captured": self.packets_captured,
             "flows_completed": self.flows_completed,
             "windows_processed": self.windows_processed,
             "result": session_res,
-        }
+        })
 
     def get_recent_flows(self, limit: int = 15) -> List[Dict[str, Any]]:
         """
@@ -407,23 +429,37 @@ class LiveCaptureEngine:
         """
         with self._lock:
             raw = list(self.completed_flows)[-limit:]
-            return [
-                {
+            res = []
+            for f in raw:
+                raw_dur = f.get("Flow_Duration", 0)
+                try:
+                    d_val = float(raw_dur)
+                    dur_ms = 0.0 if (math.isnan(d_val) or math.isinf(d_val)) else round(d_val / 1000.0, 1)
+                except Exception:
+                    dur_ms = 0.0
+
+                p_raw = f.get("_proto", f.get("Protocol", 6))
+                try:
+                    p_int = int(float(p_raw))
+                    p_name = {6: "TCP", 17: "UDP", 1: "ICMP"}.get(p_int, str(p_int))
+                except Exception:
+                    p_name = "TCP"
+
+                res.append({
                     "src": f"{f.get('_src_ip', '?')}:{f.get('_src_port', 0)}",
                     "dst": f"{f.get('_dst_ip', '?')}:{f.get('_dst_port', 0)}",
-                    "proto": "TCP" if f.get("_proto") == 6 else ("UDP" if f.get("_proto") == 17 else "ICMP"),
-                    "packets": f.get("_packets", 1),
-                    "bytes": f.get("_bytes", 0),
-                    "duration_ms": round(f.get("Flow_Duration", 0) / 1000.0, 1),
-                }
-                for f in raw
-            ]
+                    "proto": p_name,
+                    "packets": int(f.get("_packets", 1) or 1),
+                    "bytes": int(f.get("_bytes", 0) or 0),
+                    "duration_ms": dur_ms,
+                })
+            return sanitize_floats(res)
 
     def get_status(self) -> Dict[str, Any]:
         """
         Reports current engine status, statistics, and full session result.
         """
-        return {
+        raw_res = {
             "status": self.status,
             "interface": self.selected_interface,
             "packets_captured": self.packets_captured,
@@ -435,6 +471,7 @@ class LiveCaptureEngine:
             "current_result": self.get_session_result(),
             "error": self.error_message,
         }
+        return sanitize_floats(raw_res)
 
     def inject_flow_batch(self, flow_records: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
