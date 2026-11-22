@@ -153,6 +153,59 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
     if truth:
         truth = truth[:max_windows]
 
+    # ── Per-window flow forensics (5-tuple metadata) ───────────────────────
+    _W = int(meta.get("window", 35))
+    _S = int(meta.get("stride", 18))
+
+    def _safe_int(val, default=0):
+        try:
+            v = int(float(val))
+            return v if v >= 0 else default
+        except Exception:
+            return default
+
+    def _proto_name(val):
+        try:
+            v = int(float(val))
+            return {6: "TCP", 17: "UDP", 1: "ICMP"}.get(v, str(v))
+        except Exception:
+            return str(val) if val else "TCP"
+
+    _PROTO_MAP = {6: "TCP", 17: "UDP", 1: "ICMP"}
+    window_flows = []
+    for _i in range(len(imgs)):
+        start_idx = _i * _S
+        end_idx   = start_idx + _W
+        slice_df  = df.iloc[start_idx:end_idx]
+        flows = []
+        for _, frow in slice_df.iterrows():
+            # Support both underscore-style (CICFlowMeter) and hidden _meta columns
+            src_ip  = str(frow.get("_src_ip",  frow.get("Source IP",  frow.get("Src IP",  "192.168.x.x"))))
+            dst_ip  = str(frow.get("_dst_ip",  frow.get("Destination IP", frow.get("Dst IP", "10.x.x.x"))))
+            src_port = _safe_int(frow.get("_src_port", frow.get("Source_Port", frow.get("Source Port", frow.get("Src Port", 0)))))
+            dst_port = _safe_int(frow.get("_dst_port", frow.get("Destination_Port", frow.get("Destination Port", frow.get("Dst Port", 0)))))
+            proto_raw = frow.get("_proto", frow.get("Protocol", frow.get("protocol", 6)))
+            proto     = _proto_name(proto_raw)
+            packets   = _safe_int(frow.get("_packets",  frow.get("Total_Fwd_Packets",   frow.get("Total Fwd Packets",   frow.get("Fwd Packet Length Max", 0)))))
+            byte_val  = _safe_int(frow.get("_bytes",    frow.get("Total_Length_of_Fwd_Packets", frow.get("Total Length of Fwd Packets", 0))))
+            dur_raw   = frow.get("Flow_Duration", frow.get("Flow Duration", 0))
+            try:
+                dur_ms = round(float(dur_raw) / 1000.0, 1)
+            except Exception:
+                dur_ms = 0.0
+            flows.append({
+                "src_ip":      src_ip,
+                "src_port":    src_port,
+                "dst_ip":      dst_ip,
+                "dst_port":    dst_port,
+                "proto":       proto,
+                "packets":     packets,
+                "bytes":       byte_val,
+                "duration_ms": dur_ms,
+            })
+        window_flows.append(flows)
+    # ───────────────────────────────────────────────────────────────────────
+
     preds, confs, threat_info, composites, probs = predict_with_attention(
         model, imgs, classes, device="cpu", threat_levels=threat_map
     )
@@ -216,6 +269,7 @@ def run_inference(df: pd.DataFrame, max_windows: int = 50,
             "is_persistent": is_persistent,
             "top5": top5,
             "composite_b64": pil_to_b64(composites[i]),
+            "flows": window_flows[i] if i < len(window_flows) else [],
         }
         rows.append(row)
         _last_predictions.append(row)

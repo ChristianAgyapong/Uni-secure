@@ -1294,6 +1294,91 @@ export const DetectionPipelineView: React.FC = () => {
                       </div>
                     ))}
                   </div>
+
+                  {/* ── Per-Window Flow Forensics Table ── */}
+                  {selectedWindow.flows && selectedWindow.flows.length > 0 && (
+                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.07)" }}>
+                      {/* Header row */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                        <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-cyan)", flexShrink: 0 }} />
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-cyan)", textTransform: "uppercase", letterSpacing: 0.8 }}>
+                          Flow Forensics
+                        </span>
+                        <span style={{ fontSize: 9, color: "var(--text-dim)", marginLeft: "auto", fontFamily: "var(--font-mono)" }}>
+                          {selectedWindow.flows.length} connections in window #{selectedWindow.window + 1}
+                        </span>
+                      </div>
+
+                      {/* Column labels */}
+                      <div style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr 48px 52px 48px 52px",
+                        fontSize: 8, fontWeight: 700, color: "var(--text-dim)",
+                        textTransform: "uppercase", letterSpacing: 0.5,
+                        padding: "2px 6px", marginBottom: 2,
+                      }}>
+                        <span>Source</span>
+                        <span>Destination</span>
+                        <span>Proto</span>
+                        <span style={{ textAlign: "right" }}>Pkts</span>
+                        <span style={{ textAlign: "right" }}>Bytes</span>
+                        <span style={{ textAlign: "right" }}>Dur ms</span>
+                      </div>
+
+                      {/* Flow rows */}
+                      <div style={{ maxHeight: 210, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                        {selectedWindow.flows.map((f, idx) => (
+                          <div key={idx} style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 48px 52px 48px 52px",
+                            alignItems: "center",
+                            fontSize: 9, fontFamily: "var(--font-mono)",
+                            padding: "4px 6px",
+                            background: idx % 2 === 0 ? "rgba(255,255,255,0.028)" : "transparent",
+                            borderRadius: 3,
+                            gap: 4,
+                          }}>
+                            {/* Source IP:Port */}
+                            <span style={{ color: "#38bdf8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                  title={`${f.src_ip}:${f.src_port}`}>
+                              {f.src_ip}<span style={{ color: "var(--text-dim)" }}>:{f.src_port}</span>
+                            </span>
+                            {/* Dest IP:Port */}
+                            <span style={{ color: "#f97316", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                                  title={`${f.dst_ip}:${f.dst_port}`}>
+                              {f.dst_ip}<span style={{ color: "var(--text-dim)" }}>:{f.dst_port}</span>
+                            </span>
+                            {/* Protocol badge */}
+                            <span style={{
+                              color: f.proto === "TCP" ? "#a78bfa" : f.proto === "UDP" ? "#fbbf24" : "#6ee7b7",
+                              fontWeight: 700, fontSize: 8,
+                            }}>
+                              {f.proto}
+                            </span>
+                            {/* Packets */}
+                            <span style={{ color: "var(--text-dim)", textAlign: "right" }}>{f.packets}</span>
+                            {/* Bytes */}
+                            <span style={{ color: "var(--text-dim)", textAlign: "right" }}>
+                              {f.bytes >= 1024
+                                ? `${(f.bytes / 1024).toFixed(1)}K`
+                                : f.bytes}
+                            </span>
+                            {/* Duration */}
+                            <span style={{ color: "var(--text-dim)", textAlign: "right" }}>{f.duration_ms}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Mini legend */}
+                      <div style={{ display: "flex", gap: 10, marginTop: 7, fontSize: 8, color: "var(--text-dim)" }}>
+                        <span><span style={{ color: "#38bdf8" }}>■</span> SRC</span>
+                        <span><span style={{ color: "#f97316" }}>■</span> DST</span>
+                        <span><span style={{ color: "#a78bfa" }}>■</span> TCP</span>
+                        <span><span style={{ color: "#fbbf24" }}>■</span> UDP</span>
+                        <span><span style={{ color: "#6ee7b7" }}>■</span> ICMP</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

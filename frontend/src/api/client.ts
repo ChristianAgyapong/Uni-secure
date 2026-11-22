@@ -153,6 +153,16 @@ export interface WindowResult {
   composite_b64: string;
   confidence_status?: "CONFIRMED" | "EVALUATING" | "PROVISIONAL";
   is_persistent?: boolean;
+  flows?: Array<{
+    src_ip: string;
+    src_port: number;
+    dst_ip: string;
+    dst_port: number;
+    proto: string;
+    packets: number;
+    bytes: number;
+    duration_ms: number;
+  }>;
 }
 
 export interface AnalysisResult {
