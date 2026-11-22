@@ -60,36 +60,44 @@ const PulseDot: React.FC<{ color: string }> = ({ color }) => (
 const KpiCard: React.FC<{ label: string; value: string | number; sub?: string; color?: string; icon: React.ReactNode; pulse?: boolean }> =
   ({ label, value, sub, color = "#38bdf8", icon, pulse = false }) => (
     <div style={{
-      flex: 1, minWidth: 140,
-      background: "linear-gradient(135deg, rgba(12,23,44,0.9), rgba(8,16,32,0.95))",
-      border: `1px solid ${color}33`,
-      borderRadius: 10, padding: "14px 16px",
+      flex: 1, minWidth: 150,
+      background: "linear-gradient(135deg, rgba(14,24,44,0.75), rgba(10,16,30,0.85))",
+      border: `1px solid rgba(255,255,255,0.08)`,
+      borderTop: `2px solid ${color}`,
+      borderRadius: "var(--radius-sm)",
+      padding: "16px 18px",
       position: "relative", overflow: "hidden",
+      backdropFilter: "blur(14px)",
+      WebkitBackdropFilter: "blur(14px)",
+      boxShadow: `0 8px 24px -6px rgba(0,0,0,0.5), 0 0 16px ${color}14`,
+      transition: "transform 0.2s ease, border-color 0.2s ease",
     }}>
       <div style={{
-        position: "absolute", inset: 0,
-        background: `radial-gradient(circle at 100% 0%, ${color}0d 0%, transparent 60%)`,
+        position: "absolute", top: 0, right: 0, width: 90, height: 90,
+        background: `radial-gradient(circle at 100% 0%, ${color}18 0%, transparent 70%)`,
+        pointerEvents: "none",
       }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", position: "relative" }}>
         <div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.8 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.8, fontFamily: "var(--font-mono)" }}>
             {label}
           </div>
-          <div style={{ fontSize: 26, fontWeight: 800, color, fontFamily: "var(--font-mono)", marginTop: 4, lineHeight: 1 }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color, fontFamily: "var(--font-mono)", marginTop: 6, lineHeight: 1, letterSpacing: -0.5 }}>
             {value}
           </div>
-          {sub && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4 }}>{sub}</div>}
+          {sub && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, fontFamily: "var(--font-mono)" }}>{sub}</div>}
         </div>
         <div style={{
-          width: 36, height: 36, borderRadius: 8,
-          background: `${color}1a`, border: `1px solid ${color}33`,
+          width: 38, height: 38, borderRadius: 10,
+          background: `${color}18`, border: `1px solid ${color}33`,
           display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: `0 0 12px ${color}22`,
         }}>
           {icon}
         </div>
       </div>
       {pulse && (
-        <div style={{ position: "absolute", top: 8, right: 8 }}>
+        <div style={{ position: "absolute", top: 10, right: 10 }}>
           <PulseDot color={color} />
         </div>
       )}
@@ -501,8 +509,15 @@ export const DetectionPipelineView: React.FC = () => {
 
       {/* ── INPUT CONTROLS ─────────────────────────────────────────────────── */}
       <div className="panel" style={{ padding: "16px 18px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
+          <div style={{
+            display: "inline-flex",
+            background: "rgba(0, 0, 0, 0.45)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: 10,
+            padding: 3,
+            gap: 2,
+          }}>
             {(["preset", "stream", "upload", "live"] as const).map((mode) => {
               const labels = {
                 preset: "Preset Captures",
@@ -516,10 +531,10 @@ export const DetectionPipelineView: React.FC = () => {
                 upload: <Upload size={13} />,
                 live: <Wifi size={13} />,
               };
+              const isSelected = inputMode === mode;
               return (
                 <button
                   key={mode}
-                  className={`btn-secondary-soc ${inputMode === mode ? "btn-primary-soc" : ""}`}
                   onClick={() => {
                     setInputMode(mode);
                     if (mode === "live") {
@@ -541,12 +556,28 @@ export const DetectionPipelineView: React.FC = () => {
                         .catch(() => {});
                     }
                   }}
-                  style={{ padding: "7px 14px", fontSize: 12 }}
+                  style={{
+                    padding: "7px 16px",
+                    fontSize: 12,
+                    fontWeight: isSelected ? 700 : 500,
+                    borderRadius: 8,
+                    border: isSelected ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid transparent",
+                    background: isSelected
+                      ? "linear-gradient(135deg, rgba(2, 132, 199, 0.4), rgba(56, 189, 248, 0.18))"
+                      : "transparent",
+                    color: isSelected ? "#fff" : "var(--text-muted)",
+                    boxShadow: isSelected ? "0 0 16px rgba(56, 189, 248, 0.25), inset 0 1px 0 rgba(255,255,255,0.15)" : "none",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 7,
+                    transition: "all 0.18s ease",
+                  }}
                 >
                   {icons[mode]}
                   <span>{labels[mode]}</span>
                   {mode === "live" && (liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") && (
-                    <span style={{ marginLeft: 6, display: "inline-flex" }}>
+                    <span style={{ marginLeft: 4, display: "inline-flex" }}>
                       <PulseDot color="#10b981" />
                     </span>
                   )}
@@ -554,14 +585,30 @@ export const DetectionPipelineView: React.FC = () => {
               );
             })}
           </div>
-          <div style={{ fontSize: 10, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)", fontWeight: 600 }}>
-            {inputMode === "live"
-              ? liveStatus === "RUNNING"
-                ? "NPCAP WIRE CAPTURE ACTIVE"
-                : liveStatus === "RUNNING_SIMULATED"
-                ? "LOCAL WIRE STREAMING (SIMULATED)"
-                : "TAP READY"
-              : "VISION TRANSFORMER IDS PIPELINE"}
+          <div style={{
+            fontSize: 10,
+            color: "var(--accent-cyan)",
+            fontFamily: "var(--font-mono)",
+            fontWeight: 700,
+            letterSpacing: 0.6,
+            background: "rgba(14, 165, 233, 0.08)",
+            padding: "5px 12px",
+            borderRadius: 999,
+            border: "1px solid rgba(14, 165, 233, 0.25)",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-cyan)", boxShadow: "0 0 6px var(--accent-cyan)" }} />
+            <span>
+              {inputMode === "live"
+                ? liveStatus === "RUNNING"
+                  ? "NPCAP WIRE CAPTURE ACTIVE"
+                  : liveStatus === "RUNNING_SIMULATED"
+                  ? "LOCAL WIRE STREAMING (SIMULATED)"
+                  : "TAP READY"
+                : "VISION TRANSFORMER IDS PIPELINE"}
+            </span>
           </div>
         </div>
 
@@ -747,18 +794,17 @@ export const DetectionPipelineView: React.FC = () => {
             {/* Live Metrics Strip */}
             <div
               style={{
-                display: "flex",
-                gap: 16,
-                padding: "10px 14px",
-                borderRadius: 8,
-                background: "rgba(0,0,0,0.3)",
-                border: "1px solid rgba(255,255,255,0.06)",
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                gap: 10,
+                padding: "12px 16px",
+                borderRadius: "var(--radius-sm)",
+                background: "rgba(0,0,0,0.45)",
+                border: "1px solid rgba(255,255,255,0.08)",
                 alignItems: "center",
-                flexWrap: "wrap",
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 11, color: "var(--text-dim)", textTransform: "uppercase" }}>Status:</span>
                 <span
                   style={{
                     fontSize: 11,
@@ -770,47 +816,101 @@ export const DetectionPipelineView: React.FC = () => {
                         : liveStatus === "RUNNING_SIMULATED"
                         ? "#38bdf8"
                         : "var(--text-muted)",
+                    background:
+                      liveStatus === "RUNNING"
+                        ? "rgba(16, 185, 129, 0.12)"
+                        : liveStatus === "RUNNING_SIMULATED"
+                        ? "rgba(56, 189, 248, 0.12)"
+                        : "rgba(255,255,255,0.04)",
+                    border: `1px solid ${
+                      liveStatus === "RUNNING"
+                        ? "rgba(16, 185, 129, 0.3)"
+                        : liveStatus === "RUNNING_SIMULATED"
+                        ? "rgba(56, 189, 248, 0.3)"
+                        : "rgba(255,255,255,0.08)"
+                    }`,
+                    padding: "5px 12px",
+                    borderRadius: 999,
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    whiteSpace: "nowrap",
                   }}
                 >
+                  <span style={{
+                    width: 6, height: 6, borderRadius: "50%",
+                    background: liveStatus === "RUNNING" ? "#10b981" : liveStatus === "RUNNING_SIMULATED" ? "#38bdf8" : "var(--text-muted)",
+                    boxShadow: liveStatus === "RUNNING" ? "0 0 8px #10b981" : liveStatus === "RUNNING_SIMULATED" ? "0 0 8px #38bdf8" : "none",
+                  }} />
                   {liveStatus === "RUNNING"
-                    ? "● LIVE NPCAP ACTIVE"
+                    ? "LIVE NPCAP ACTIVE"
                     : liveStatus === "RUNNING_SIMULATED"
-                    ? "● SIMULATED TELEMETRY ACTIVE"
-                    : "STOPPED"}
+                    ? "SIMULATED WIRE TAP"
+                    : "STANDBY"}
                 </span>
               </div>
 
-              <div style={{ width: 1, height: 16, background: "rgba(255,255,255,0.1)" }} />
-
-              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                Packets: <strong style={{ color: "#fff" }}>{liveStats.packets}</strong>
+              <div style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                padding: "6px 12px",
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontFamily: "var(--font-mono)",
+              }}>
+                <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Packets</span>
+                <strong style={{ fontSize: 13, color: "#fff" }}>{liveStats.packets.toLocaleString()}</strong>
               </div>
 
-              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                Flows Extracted: <strong style={{ color: "#fff" }}>{liveStats.flows}</strong>
+              <div style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                padding: "6px 12px",
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontFamily: "var(--font-mono)",
+              }}>
+                <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Flows</span>
+                <strong style={{ fontSize: 13, color: "var(--accent-cyan)" }}>{liveStats.flows.toLocaleString()}</strong>
               </div>
 
-              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-muted)" }}>
-                Windows Evaluated: <strong style={{ color: "var(--accent-cyan)" }}>{liveStats.windows}</strong>
+              <div style={{
+                background: "rgba(255,255,255,0.02)",
+                border: "1px solid rgba(255,255,255,0.05)",
+                padding: "6px 12px",
+                borderRadius: 6,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                fontFamily: "var(--font-mono)",
+              }}>
+                <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Evaluated</span>
+                <strong style={{ fontSize: 13, color: "#a5b4fc" }}>{liveStats.windows.toLocaleString()}</strong>
               </div>
 
               {selectedWindow && (
-                <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase" }}>Active Triage:</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 180 }}>
+                  <span style={{ fontSize: 10, color: "var(--text-dim)", textTransform: "uppercase", fontFamily: "var(--font-mono)" }}>Triage:</span>
                   <span style={{
                     fontSize: 11, fontWeight: 700, fontFamily: "var(--font-mono)",
                     color: getThreatMeta(selectedWindow.threat_level).color,
                     background: getThreatMeta(selectedWindow.threat_level).bg,
                     border: `1px solid ${getThreatMeta(selectedWindow.threat_level).border}`,
-                    padding: "2px 8px", borderRadius: 4,
+                    padding: "4px 10px", borderRadius: 999,
+                    boxShadow: `0 0 12px ${getThreatMeta(selectedWindow.threat_level).color}22`,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
                   }}>
-                    Window #{selectedWindow.window + 1}: {selectedWindow.prediction} ({(selectedWindow.confidence * 100).toFixed(1)}%)
+                    #{selectedWindow.window + 1}: {selectedWindow.prediction} ({(selectedWindow.confidence * 100).toFixed(0)}%)
                   </span>
                 </div>
               )}
 
               {liveStats.error && (
-                <div style={{ width: "100%", fontSize: 11, color: "#f59e0b", marginTop: 4 }}>
+                <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "#f59e0b", padding: "4px 8px", background: "rgba(245, 158, 11, 0.08)", borderRadius: 4, border: "1px solid rgba(245, 158, 11, 0.2)" }}>
                   ⚠️ {liveStats.error}
                 </div>
               )}
@@ -820,16 +920,18 @@ export const DetectionPipelineView: React.FC = () => {
             {recentFlows.length > 0 && (
               <div
                 style={{
-                  background: "rgba(0,0,0,0.45)",
+                  background: "rgba(0,0,0,0.55)",
                   border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 8,
-                  padding: "10px 14px",
-                  maxHeight: 130,
+                  borderRadius: 10,
+                  padding: "12px 16px",
+                  maxHeight: 140,
                   overflowY: "auto",
+                  boxShadow: "inset 0 1px 3px rgba(0,0,0,0.4)",
                 }}
               >
-                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-cyan)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
-                  Live Extracted Flow Stream (Real-Time Bidirectional 5-Tuples)
+                <div style={{ fontSize: 10, fontWeight: 700, color: "var(--accent-cyan)", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--accent-cyan)", boxShadow: "0 0 6px var(--accent-cyan)" }} />
+                  <span>Live Bidirectional 5-Tuple Connection Stream</span>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   {recentFlows.slice().reverse().map((f, idx) => (
@@ -842,18 +944,24 @@ export const DetectionPipelineView: React.FC = () => {
                         fontSize: 10,
                         fontFamily: "var(--font-mono)",
                         color: "var(--text-muted)",
-                        padding: "3px 6px",
+                        padding: "4px 8px",
                         borderRadius: 4,
                         background: idx === 0 ? "rgba(56,189,248,0.12)" : "rgba(255,255,255,0.02)",
+                        borderLeft: idx === 0 ? "2px solid var(--accent-cyan)" : "2px solid transparent",
                       }}
                     >
                       <span>
-                        <strong style={{ color: "#fff" }}>{f.src}</strong> → <strong style={{ color: "var(--accent-cyan)" }}>{f.dst}</strong>
+                        <strong style={{ color: "#38bdf8" }}>{f.src}</strong> <span style={{ color: "var(--text-dim)" }}>→</span> <strong style={{ color: "#f97316" }}>{f.dst}</strong>
                       </span>
-                      <div style={{ display: "flex", gap: 12 }}>
-                        <span style={{ color: f.proto === "TCP" ? "#38bdf8" : "#f59e0b", fontWeight: 700 }}>{f.proto}</span>
-                        <span>{f.packets} pkts ({f.bytes} B)</span>
-                        <span>{f.duration_ms} ms</span>
+                      <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                        <span style={{
+                          color: f.proto === "TCP" ? "#a78bfa" : f.proto === "UDP" ? "#fbbf24" : "#6ee7b7",
+                          fontWeight: 700, fontSize: 9,
+                        }}>
+                          {f.proto}
+                        </span>
+                        <span>{f.packets} pkts ({f.bytes >= 1024 ? `${(f.bytes / 1024).toFixed(1)}K` : f.bytes} B)</span>
+                        <span style={{ color: "var(--text-dim)" }}>{f.duration_ms} ms</span>
                       </div>
                     </div>
                   ))}
@@ -864,20 +972,20 @@ export const DetectionPipelineView: React.FC = () => {
         )}
 
         {/* Quick Threat Test Vector Chips */}
-        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.6, marginRight: 4 }}>
-            Quick Threat Vectors:
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.06)", display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: 0.8, marginRight: 4, fontFamily: "var(--font-mono)" }}>
+            Quick Vectors:
           </span>
           {[
-            { label: "DDoS SYN Flood", icon: "🔴", attack: "DDoS Attack" },
-            { label: "PortScan Recon", icon: "🟠", attack: "PortScan Probe" },
-            { label: "Botnet C2 Beacon", icon: "🟠", attack: "Botnet C2 Beaconing" },
-            { label: "Zero-Day APT", icon: "⚡", attack: "Zero-Day APT Exfiltration" },
-            { label: "UNSW Exploits", icon: "🔴", attack: "UNSW Exploits" },
-            { label: "UNSW Generic", icon: "🔴", attack: "UNSW Generic" },
-            { label: "UNSW Worms", icon: "🔴", attack: "UNSW Worms" },
-            { label: "UNSW Normal", icon: "🟢", attack: "UNSW Normal" },
-            { label: "Benign Baseline", icon: "🟢", attack: "Normal Traffic" },
+            { label: "DDoS SYN Flood", dot: "#ef4444", attack: "DDoS Attack" },
+            { label: "PortScan Recon", dot: "#f97316", attack: "PortScan Probe" },
+            { label: "Botnet C2 Beacon", dot: "#f59e0b", attack: "Botnet C2 Beaconing" },
+            { label: "Zero-Day APT", dot: "#38bdf8", attack: "Zero-Day APT Exfiltration" },
+            { label: "UNSW Exploits", dot: "#ef4444", attack: "UNSW Exploits" },
+            { label: "UNSW Generic", dot: "#f43f5e", attack: "UNSW Generic" },
+            { label: "UNSW Worms", dot: "#dc2626", attack: "UNSW Worms" },
+            { label: "UNSW Normal", dot: "#10b981", attack: "UNSW Normal" },
+            { label: "Benign Baseline", dot: "#10b981", attack: "Normal Traffic" },
           ].map((item) => (
             <button
               key={item.label}
@@ -911,26 +1019,42 @@ export const DetectionPipelineView: React.FC = () => {
                 }
               }}
               style={{
-                fontSize: 11, fontWeight: 600,
-                padding: "4px 10px", borderRadius: 5,
-                background: "rgba(255,255,255,0.03)",
-                border: "1px solid rgba(255,255,255,0.08)",
-                color: "var(--text-muted)", cursor: "pointer",
-                display: "flex", alignItems: "center", gap: 5,
-                transition: "all 0.15s",
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "var(--font-mono)",
+                padding: "4px 10px",
+                borderRadius: 999,
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.09)",
+                color: "var(--text-muted)",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.borderColor = "var(--accent-cyan)";
                 e.currentTarget.style.color = "#fff";
-                e.currentTarget.style.background = "rgba(56,189,248,0.08)";
+                e.currentTarget.style.background = "rgba(255, 255, 255, 0.07)";
+                e.currentTarget.style.borderColor = `${item.dot}80`;
+                e.currentTarget.style.boxShadow = `0 0 10px ${item.dot}33`;
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
                 e.currentTarget.style.color = "var(--text-muted)";
-                e.currentTarget.style.background = "rgba(255,255,255,0.03)";
+                e.currentTarget.style.background = "rgba(255, 255, 255, 0.03)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.09)";
+                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.3)";
               }}
             >
-              <span>{item.icon}</span>
+              <span style={{
+                width: 7,
+                height: 7,
+                borderRadius: "50%",
+                background: item.dot,
+                boxShadow: `0 0 6px ${item.dot}`,
+                flexShrink: 0,
+              }} />
               <span>{item.label}</span>
             </button>
           ))}
@@ -941,26 +1065,28 @@ export const DetectionPipelineView: React.FC = () => {
       {loading && (
         <div style={{
           background: "linear-gradient(135deg, rgba(8,16,32,0.97), rgba(12,23,44,0.97))",
-          border: "1px solid var(--border)", borderRadius: 10, padding: "28px 24px",
+          border: "1px solid var(--border)", borderRadius: "var(--radius-md)", padding: "32px 24px",
           textAlign: "center", position: "relative", overflow: "hidden",
+          boxShadow: "var(--shadow-card)",
         }}>
           <div style={{
             position: "absolute", left: 0, right: 0,
             top: `${scanLine}%`, height: 2,
             background: "linear-gradient(90deg, transparent, var(--accent-cyan), transparent)",
             transition: "top 0.04s linear",
+            boxShadow: "0 0 12px var(--accent-cyan)",
           }} />
-          <Cpu size={28} color="var(--accent-cyan)" style={{ marginBottom: 10 }} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: "#fff" }}>MEIC-ViT Inference Running</div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-            Mapping flows → 35×35 RGB tensors → Transformer classification…
+          <Cpu size={32} color="var(--accent-cyan)" style={{ marginBottom: 12 }} />
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: -0.2 }}>MEIC-ViT Neural Inference Running</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4, fontFamily: "var(--font-mono)" }}>
+            Mapping 35 normalized flows → 35×35 RGB tensors → Multi-Head Attention…
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: 20, marginTop: 16 }}>
-            {["Path A: Global Stats", "Path B: Row Visual", "Path C: Sequential"].map((p, i) => (
+          <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 18, flexWrap: "wrap" }}>
+            {["Path A: Global Volumetric", "Path B: Row-Visual Convolutions", "Path C: Multi-Head Transformer"].map((p, i) => (
               <div key={p} style={{
-                fontSize: 10, color: "var(--text-dim)", fontFamily: "var(--font-mono)",
-                padding: "4px 10px", borderRadius: 4,
-                background: "rgba(56,189,248,0.06)", border: "1px solid var(--border)",
+                fontSize: 10, color: "var(--accent-cyan)", fontFamily: "var(--font-mono)",
+                padding: "5px 12px", borderRadius: 999,
+                background: "rgba(56,189,248,0.08)", border: "1px solid rgba(56,189,248,0.25)",
                 animation: `fadeIn 0.3s ease ${i * 0.15}s both`,
               }}>
                 {p}
@@ -980,26 +1106,53 @@ export const DetectionPipelineView: React.FC = () => {
 
       {/* ── Live TAP Standing-by / Capturing Card ──────────────────────── */}
       {!result && !loading && inputMode === "live" && (
-        <div className="panel" style={{ padding: "34px 24px", textAlign: "center", borderRadius: 10 }}>
-          <Radio
-            size={36}
-            color={liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "#10b981" : "var(--accent-cyan)"}
-          />
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", marginTop: 12 }}>
+        <div className="panel" style={{ padding: "44px 24px", textAlign: "center", borderRadius: "var(--radius-md)", position: "relative", overflow: "hidden" }}>
+          <div style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: 300, height: 300,
+            borderRadius: "50%",
+            border: `1px solid ${liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "rgba(16, 185, 129, 0.12)" : "rgba(56, 189, 248, 0.1)"}`,
+            pointerEvents: "none",
+          }} />
+          <div style={{
+            width: 68, height: 68, borderRadius: "50%",
+            background: liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "rgba(16, 185, 129, 0.12)" : "rgba(56, 189, 248, 0.12)",
+            border: `1px solid ${liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "rgba(16, 185, 129, 0.3)" : "rgba(56, 189, 248, 0.3)"}`,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            boxShadow: liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "0 0 30px rgba(16, 185, 129, 0.3)" : "0 0 30px rgba(56, 189, 248, 0.25)",
+            marginBottom: 18,
+          }}>
+            <Radio
+              size={32}
+              color={liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED" ? "#10b981" : "var(--accent-cyan)"}
+            />
+          </div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: -0.3 }}>
             {liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
               ? "Live Network Packet Sniffing Active"
-              : "Live Network TAP Ready"}
+              : "Live Network TAP Standing-by"}
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, maxWidth: 480, marginInline: "auto" }}>
+          <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 6, maxWidth: 520, marginInline: "auto", lineHeight: 1.6 }}>
             {liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED"
-              ? `Extracting 35-feature bidirectional flows in real-time (${liveStats.flows} flows collected). MEIC-ViT will evaluate each 35-flow window automatically, or immediately when you click STOP CAPTURE.`
+              ? `Extracting 35-feature bidirectional flows in real-time (${liveStats.flows} flows collected). MEIC-ViT automatically evaluates each 35-flow sliding window, or immediately when you click STOP CAPTURE.`
               : "Select your active network interface (e.g. Wi-Fi) above and click START LIVE CAPTURE to begin sniffing live traffic from your computer."}
           </div>
           {(liveStatus === "RUNNING" || liveStatus === "RUNNING_SIMULATED") && (
-            <div style={{ marginTop: 18, display: "flex", justifyContent: "center", gap: 20 }}>
-              <div style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
+            <div style={{ marginTop: 22, display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+              <div style={{ fontSize: 11, fontFamily: "var(--font-mono)", color: "var(--text-dim)" }}>
                 Current Window Ingestion:{" "}
                 <strong style={{ color: "var(--accent-cyan)" }}>{liveStats.flows % 35} / 35 flows</strong>
+              </div>
+              <div style={{ width: 240, height: 5, background: "rgba(255, 255, 255, 0.08)", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{
+                  width: `${((liveStats.flows % 35) / 35) * 100}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, var(--accent-blue), var(--accent-cyan))",
+                  borderRadius: 999,
+                  transition: "width 0.3s ease",
+                  boxShadow: "0 0 10px var(--accent-cyan)",
+                }} />
               </div>
             </div>
           )}
@@ -1152,12 +1305,13 @@ export const DetectionPipelineView: React.FC = () => {
                       key={f}
                       onClick={() => setFilterLevel(f)}
                       style={{
-                        fontSize: 10, fontWeight: 700, letterSpacing: 0.5,
-                        padding: "3px 9px", borderRadius: 4, cursor: "pointer", border: "1px solid",
-                        background: filterLevel === f ? "var(--accent-cyan)" : "transparent",
-                        color: filterLevel === f ? "#000" : "var(--text-dim)",
-                        borderColor: filterLevel === f ? "var(--accent-cyan)" : "var(--border)",
-                        transition: "all 0.15s",
+                        fontSize: 10, fontWeight: 700, letterSpacing: 0.5, fontFamily: "var(--font-mono)",
+                        padding: "4px 10px", borderRadius: 999, cursor: "pointer",
+                        background: filterLevel === f ? "var(--accent-cyan)" : "rgba(255,255,255,0.03)",
+                        color: filterLevel === f ? "#090d16" : "var(--text-muted)",
+                        border: filterLevel === f ? "1px solid var(--accent-cyan)" : "1px solid rgba(255,255,255,0.08)",
+                        boxShadow: filterLevel === f ? "0 0 12px rgba(56, 189, 248, 0.35)" : "none",
+                        transition: "all 0.18s ease",
                       }}
                     >
                       {f === "CONFIRMED" ? "CONFIRMED ONLY (≥60%)" : f}

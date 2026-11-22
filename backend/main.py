@@ -1095,11 +1095,7 @@ class LiveInferenceAdapter:
     }
 
     def predict_flow_batch(self, flow_records: list) -> dict:
-        clean_records = [
-            {k: v for k, v in f.items() if k not in self._META_KEYS}
-            for f in flow_records
-        ]
-        df = pd.DataFrame(clean_records)
+        df = pd.DataFrame(flow_records)
 
         # Route dynamically between CICIDS-2017 and UNSW-NB15 models based on schema
         use_model = MODEL

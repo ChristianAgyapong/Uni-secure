@@ -14,7 +14,7 @@ from typing import Dict, List, Optional, Tuple, Any
 
 # Scapy imports
 try:
-    from scapy.all import sniff, IP, TCP, UDP, ICMP
+    from scapy.all import sniff, IP, IPv6, TCP, UDP, ICMP, conf
     from scapy.arch.windows import get_windows_if_list
     SCAPY_AVAILABLE = True
 except Exception:
@@ -521,13 +521,25 @@ class LiveCaptureEngine:
             return list(self.recent_events)[-limit:]
 
     def _process_packet(self, pkt):
-        if not pkt.haslayer(IP):
+        self.packets_captured += 1
+
+        proto = 6
+        src_ip = "0.0.0.0"
+        dst_ip = "0.0.0.0"
+
+        if pkt.haslayer(IP):
+            ip = pkt[IP]
+            proto = ip.proto
+            src_ip = ip.src
+            dst_ip = ip.dst
+        elif pkt.haslayer(IPv6):
+            ip = pkt[IPv6]
+            proto = getattr(ip, "nh", 6)
+            src_ip = ip.src
+            dst_ip = ip.dst
+        else:
             return
 
-        ip = pkt[IP]
-        proto = ip.proto
-        src_ip = ip.src
-        dst_ip = ip.dst
         src_port = 0
         dst_port = 0
 
@@ -541,8 +553,6 @@ class LiveCaptureEngine:
         now = time.time()
         fwd_key = (src_ip, src_port, dst_ip, dst_port, proto)
         bwd_key = (dst_ip, dst_port, src_ip, src_port, proto)
-
-        self.packets_captured += 1
 
         with self._lock:
             # Check if matching flow exists
@@ -583,16 +593,57 @@ class LiveCaptureEngine:
             # Look up interface in Scapy's interface list
             target_iface = None
             try:
-                from scapy.all import conf
-                for iface_key, iface_obj in conf.ifaces.items():
-                    name = getattr(iface_obj, 'name', '') or ''
-                    desc = getattr(iface_obj, 'description', '') or ''
-                    if (self.selected_interface.lower() in name.lower() or 
-                        self.selected_interface.lower() in desc.lower()):
-                        target_iface = iface_obj
+                conf.ifaces.reload()
+            except Exception:
+                pass
+
+            target_guid = None
+            target_desc = None
+            try:
+                win_list = get_windows_if_list()
+                for w in win_list:
+                    if (w.get("name", "").lower() == self.selected_interface.lower() or 
+                        self.selected_interface.lower() in w.get("description", "").lower()):
+                        target_guid = w.get("guid")
+                        target_desc = w.get("description")
                         break
             except Exception:
-                target_iface = None
+                pass
+
+            for iface_key, iface_obj in conf.ifaces.items():
+                name = getattr(iface_obj, 'name', '') or ''
+                desc = getattr(iface_obj, 'description', '') or ''
+                net_name = getattr(iface_obj, 'network_name', '') or ''
+                guid = getattr(iface_obj, 'guid', '') or ''
+
+                if target_guid and (target_guid.lower() in str(iface_key).lower() or target_guid.lower() in str(guid).lower()):
+                    target_iface = iface_obj
+                    break
+                if self.selected_interface.lower() == net_name.lower() or self.selected_interface.lower() in net_name.lower():
+                    target_iface = iface_obj
+                    break
+                if self.selected_interface.lower() in name.lower() or self.selected_interface.lower() in desc.lower():
+                    target_iface = iface_obj
+                    break
+                if target_desc and target_desc.lower() in desc.lower():
+                    target_iface = iface_obj
+                    break
+
+            is_loopback_requested = (
+                "loopback" in self.selected_interface.lower() or
+                "127.0.0.1" in self.selected_interface or
+                "pseudo" in self.selected_interface.lower()
+            )
+
+            # If user requested a physical NIC (Wi-Fi/Ethernet) but Npcap doesn't expose it:
+            if target_iface is None and not is_loopback_requested:
+                print(f"[LiveCapture] Interface '{self.selected_interface}' not accessible via Npcap (requires Administrator privileges).")
+                self._handle_permission_fallback(
+                    f"Administrator elevation required for Npcap to capture raw wire packets on '{self.selected_interface}'. To capture real network wire traffic, start PowerShell as Administrator ('Run as administrator' -> python main.py). Currently streaming simulated local telemetry."
+                )
+                return
+
+            print(f"[LiveCapture] Sniffing on resolved device: {target_iface or 'default'}")
 
             # Attempt live sniff in repeating slices so reap and stop checks execute
             while not self._stop_event.is_set():
@@ -610,7 +661,7 @@ class LiveCaptureEngine:
             err_str = str(e)
             print(f"[LiveCapture] Note: Raw packet capture requires elevated Npcap permissions ({err_str}).")
             self._handle_permission_fallback(
-                "Npcap Administrator privileges needed for raw wire capture. Running simulated local telemetry."
+                f"Npcap Administrator privileges needed for raw wire capture ({err_str}). Running simulated local telemetry."
             )
 
     def _handle_permission_fallback(self, reason: str):
